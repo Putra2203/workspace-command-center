@@ -47,7 +47,12 @@ export function Sidebar({ projects }: SidebarProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const activeProject = projects.find(p => p.id === activeProjectId || p.identifier === activeProjectId) || projects[0];
+  const allProjects = [
+    { id: 'ALL', name: 'All Projects', identifier: 'ALL' },
+    ...projects,
+  ];
+
+  const activeProject = allProjects.find(p => p.id === activeProjectId || p.identifier === activeProjectId) || allProjects[0];
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -124,9 +129,9 @@ export function Sidebar({ projects }: SidebarProps) {
             >
               <div className="p-1.5 space-y-0.5">
                 <div className="px-2 py-1 text-[10px] font-semibold text-[#71717A] uppercase tracking-wider">
-                  Projects ({projects.length})
+                  Projects ({allProjects.length})
                 </div>
-                {projects.map((proj) => {
+                {allProjects.map((proj) => {
                   const isSelected = proj.id === activeProject?.id;
                   return (
                     <button

@@ -15,7 +15,6 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { Flag } from 'lucide-react';
 import { IssueCard } from './IssueCard';
 import { BulkActionPreview } from './BulkActionPreview';

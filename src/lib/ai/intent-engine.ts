@@ -2,8 +2,6 @@ import { IntentResult, ConversationContext, ActionPlan, ActionStep } from '@/typ
 import { ActionPlanSchema } from '@/types/schemas';
 import { classifyIntentTier, selectModelForTier } from './router';
 import { decomposeFeatureToSubtasks } from './decomposition';
-import { planeService } from '@/infrastructure/plane/PlaneClient';
-import { findSimilarIssues } from '@/domain/work_items/duplicate-detection';
 
 /**
  * Parses user input to determine the intent and extract relevant entities.

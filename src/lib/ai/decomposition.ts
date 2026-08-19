@@ -8,7 +8,7 @@ export interface SubtaskTemplate {
  */
 export async function decomposeFeatureToSubtasks(
   featurePrompt: string,
-  projectKey: string = 'PROJECT'
+  _projectKey: string = 'PROJECT'
 ): Promise<SubtaskTemplate[]> {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 

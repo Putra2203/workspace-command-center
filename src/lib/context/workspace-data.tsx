@@ -104,21 +104,16 @@ export function WorkspaceDataProvider({ children }: { children: ReactNode }) {
   });
 
   // Keep the last-used project (restored from the workspace store on init) if
-  // it's still in this workspace's project list; otherwise fall back to the
-  // first project returned by the API — no specific identifier assumed.
+  // it's still in this workspace's project list or 'ALL'; otherwise fall back
+  // to the first project returned by the API — no specific identifier assumed.
   useEffect(() => {
     if (projects.length === 0) return;
-    const stillValid = activeProjectId && projects.some(p => p.id === activeProjectId);
+    const stillValid = activeProjectId === 'ALL' || (activeProjectId && projects.some(p => p.id === activeProjectId));
     if (!stillValid) {
       setActiveProject(projects[0].id, projects[0].identifier);
     }
   }, [projects, activeProjectId, setActiveProject]);
 
-  // Fetch issues, states, and members when active project changes.
-  // `forceRefresh` bypasses the Supabase-backed states cache (P0-10) — used
-  // by manual refresh and the auto-refresh interval below, since a stale
-  // cached state list (up to 60s old) could otherwise mask an external
-  // Plane change (e.g. a renamed/re-grouped state) for up to a minute.
   const fetchProjectData = useCallback(async (forceRefresh = false) => {
     if (!activeProjectId) return;
 
@@ -126,36 +121,63 @@ export function WorkspaceDataProvider({ children }: { children: ReactNode }) {
       setFetchingIssues(true);
       setPermissionError(null);
 
-      const [issuesRes, statesRes, membersRes] = await Promise.all([
-        fetch(`/api/plane?action=listIssues&projectId=${activeProjectId}`),
-        fetch(`/api/plane?action=listStates&projectId=${activeProjectId}${forceRefresh ? '&bypassCache=true' : ''}`),
-        fetch(`/api/plane?action=listMembers&projectId=${activeProjectId}`).catch(() => null),
-      ]);
+      if (activeProjectId === 'ALL' && projects.length > 0) {
+        const issuesPromises = projects.map(p =>
+          fetch(`/api/plane?action=listIssues&projectId=${p.id}`)
+            .then(res => res.json())
+            .then(data => (Array.isArray(data) ? data : data.results || []))
+            .catch(() => [])
+        );
 
-      const issuesData = await issuesRes.json();
-      const statesData = await statesRes.json();
-      const membersData = membersRes ? await membersRes.json().catch(() => []) : [];
+        const statesPromises = projects.map(p =>
+          fetch(`/api/plane?action=listStates&projectId=${p.id}${forceRefresh ? '&bypassCache=true' : ''}`)
+            .then(res => res.json())
+            .then(data => (Array.isArray(data) ? data : data.results || []))
+            .catch(() => [])
+        );
 
-      if (issuesData.error && issuesData.error.includes('403')) {
-        setPermissionError(`You do not have access permission for this project.`);
-        setIssues([]);
+        const [allIssuesArrays, allStatesArrays] = await Promise.all([
+          Promise.all(issuesPromises),
+          Promise.all(statesPromises),
+        ]);
+
+        const combinedIssues = allIssuesArrays.flat();
+        const combinedStates = Array.from(new Map(allStatesArrays.flat().map(s => [s.id, s])).values());
+
+        setIssues(combinedIssues);
+        setStates(combinedStates);
       } else {
-        const rawIssues = Array.isArray(issuesData) ? issuesData : issuesData.results || [];
-        setIssues(rawIssues);
+        const [issuesRes, statesRes, membersRes] = await Promise.all([
+          fetch(`/api/plane?action=listIssues&projectId=${activeProjectId}`),
+          fetch(`/api/plane?action=listStates&projectId=${activeProjectId}${forceRefresh ? '&bypassCache=true' : ''}`),
+          fetch(`/api/plane?action=listMembers&projectId=${activeProjectId}`).catch(() => null),
+        ]);
+
+        const issuesData = await issuesRes.json();
+        const statesData = await statesRes.json();
+        const membersData = membersRes ? await membersRes.json().catch(() => []) : [];
+
+        if (issuesData.error && issuesData.error.includes('403')) {
+          setPermissionError(`You do not have access permission for this project.`);
+          setIssues([]);
+        } else {
+          const rawIssues = Array.isArray(issuesData) ? issuesData : issuesData.results || [];
+          setIssues(rawIssues);
+        }
+
+        const rawStates = Array.isArray(statesData) ? statesData : statesData.results || [];
+        setStates(rawStates);
+
+        const rawMembers = Array.isArray(membersData) ? membersData : membersData.results || [];
+        setMembers(rawMembers);
       }
-
-      const rawStates = Array.isArray(statesData) ? statesData : statesData.results || [];
-      setStates(rawStates);
-
-      const rawMembers = Array.isArray(membersData) ? membersData : membersData.results || [];
-      setMembers(rawMembers);
     } catch (err: unknown) {
       console.error('Failed to fetch project data:', err);
       setPermissionError(err instanceof Error ? err.message : 'Failed to load project data');
     } finally {
       setFetchingIssues(false);
     }
-  }, [activeProjectId]);
+  }, [activeProjectId, projects]);
 
   useEffect(() => {
     fetchProjectData();

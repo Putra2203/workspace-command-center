@@ -6,6 +6,7 @@ export interface FocusIssue extends WorkItemLike {
   title?: string;
   sequence_id?: number;
   priority?: string;
+  project_detail?: { identifier: string };
 }
 
 /**
