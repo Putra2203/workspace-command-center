@@ -3,14 +3,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { SendHorizontal } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ActionCard } from './ActionCard';
+import { ActionCard, ActionPlanCard } from './ActionCard';
 import { useWorkspaceStore } from '@/stores/workspace-store';
+import { ActionPlan } from '@/types/ai';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   actionCards?: any[];
+  plan?: ActionPlan | null;
 }
 
 interface ChatInterfaceProps {
@@ -29,8 +31,6 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
 
-  // Consume a draft handed off from elsewhere (e.g. the command palette's
-  // "Create new issue") exactly once, then clear it so it doesn't reapply.
   useEffect(() => {
     if (pendingCommand === null) return;
     setInput(pendingCommand);
@@ -47,7 +47,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/ai', {
+      const res = await fetch('/api/ai/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -63,11 +63,11 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content: data.reply || 'Request processed.',
-        actionCards: data.actionCards
+        actionCards: data.actionCards,
+        plan: data.plan,
       };
       setMessages(prev => [...prev, assistantMsg]);
 
-      // Notify parent to refresh board/issues if action executed
       if (data.actionCards && data.actionCards.length > 0 && onActionExecuted) {
         onActionExecuted();
       }
@@ -82,6 +82,42 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleApprovePlan = async (plan: ActionPlan) => {
+    try {
+      const res = await fetch('/api/ai/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan }),
+      });
+      const data = await res.json();
+
+      const execMsg: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: data.reply || 'Rencana tindakan telah dieksekusi.',
+        actionCards: data.actionCards,
+      };
+
+      setMessages(prev => [...prev, execMsg]);
+      if (onActionExecuted) {
+        onActionExecuted();
+      }
+    } catch (error) {
+      console.error('Failed to execute plan:', error);
+      const errCard: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: 'Gagal mengeksekusi rencana tindakan.',
+        actionCards: [{ type: 'error', title: 'Execution Error', message: 'Gagal menghubungi server eksekusi.' }],
+      };
+      setMessages(prev => [...prev, errCard]);
+    }
+  };
+
+  const handleCancelPlan = (msgId: string) => {
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, plan: null } : m));
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -139,6 +175,14 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                   }`}>
                     <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
                     
+                    {msg.plan && (
+                      <ActionPlanCard
+                        plan={msg.plan}
+                        onApprove={handleApprovePlan}
+                        onCancel={() => handleCancelPlan(msg.id)}
+                      />
+                    )}
+
                     {msg.actionCards && msg.actionCards.length > 0 && (
                       <div className="mt-4 space-y-3">
                         {msg.actionCards.map((card, i) => (
@@ -158,7 +202,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                 >
                   <div className="bg-[#111113] border border-white/10 rounded-2xl rounded-bl-sm p-4 flex items-center gap-2 text-xs text-[#A1A1AA]">
                     <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    <span>Processing command...</span>
+                    <span>Analyzing intent & building plan...</span>
                   </div>
                 </motion.div>
               )}

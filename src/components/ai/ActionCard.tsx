@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { motion } from 'motion/react';
-import { CheckCircle2, Info, AlertCircle, ListTodo, FileText } from 'lucide-react';
+import { CheckCircle2, Info, AlertCircle, ListTodo, FileText, ShieldAlert, Play, X, Loader2 } from 'lucide-react';
+import { ActionPlan } from '@/types/ai';
 
 interface ActionCardProps {
   data: {
@@ -14,8 +16,126 @@ interface ActionCardProps {
   };
 }
 
+interface ActionPlanCardProps {
+  plan: ActionPlan;
+  onApprove: (plan: ActionPlan) => Promise<void>;
+  onCancel: () => void;
+}
+
+export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProps) {
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [isCancelled, setIsCancelled] = useState(false);
+
+  const handleApprove = async () => {
+    setIsExecuting(true);
+    try {
+      await onApprove(plan);
+    } finally {
+      setIsExecuting(false);
+    }
+  };
+
+  const handleCancelClick = () => {
+    setIsCancelled(true);
+    onCancel();
+  };
+
+  if (isCancelled) {
+    return (
+      <div className="p-3 rounded-xl border border-white/10 bg-[#111113] text-xs text-[#71717A] italic">
+        Rencana tindakan dibatalkan oleh pengguna.
+      </div>
+    );
+  }
+
+  const getRiskBadgeClass = (risk: string) => {
+    switch (risk) {
+      case 'high': return 'bg-red-500/10 border-red-500/30 text-red-400';
+      case 'medium': return 'bg-amber-500/10 border-amber-500/30 text-amber-400';
+      default: return 'bg-green-500/10 border-green-500/30 text-green-400';
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 shadow-md my-2 w-full space-y-3"
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 border-b border-amber-500/20 pb-3">
+        <div className="flex items-start gap-2.5">
+          <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <div className="text-xs font-mono uppercase tracking-wider text-amber-400 font-semibold">
+              Persetujuan Tindakan {plan.risk && `(${plan.risk} risk)`}
+            </div>
+            <div className="text-sm font-semibold text-[#FAFAFA] mt-0.5">{plan.summary}</div>
+          </div>
+        </div>
+        <span className={`text-[10px] px-2 py-0.5 rounded border uppercase font-mono font-semibold ${getRiskBadgeClass(plan.risk)}`}>
+          {plan.risk} risk
+        </span>
+      </div>
+
+      {/* Steps List */}
+      <div className="space-y-2">
+        <div className="text-[11px] font-mono text-[#A1A1AA] uppercase">Langkah Perubahan ({plan.steps.length}):</div>
+        {plan.steps.map((step, idx) => (
+          <div key={idx} className="p-2.5 rounded-lg bg-[#18181B] border border-white/10 text-xs space-y-1.5">
+            <div className="flex items-center justify-between font-mono">
+              <span className="text-blue-400 font-semibold">{step.operation}</span>
+              <span className="text-[#A1A1AA] bg-[#111113] px-2 py-0.5 rounded border border-white/5">{step.target}</span>
+            </div>
+
+            {step.changes && Object.keys(step.changes).length > 0 && (
+              <div className="grid grid-cols-2 gap-1.5 pt-1 text-[11px]">
+                {Object.entries(step.changes).map(([k, v]) => (
+                  <div key={k} className="bg-[#111113] p-1.5 rounded border border-white/5">
+                    <span className="text-[#71717A] block font-mono text-[10px]">{k}</span>
+                    <span className="text-[#FAFAFA] font-medium truncate block">{String(v)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex items-center justify-end gap-2 pt-2 border-t border-amber-500/20">
+        <button
+          onClick={handleCancelClick}
+          disabled={isExecuting}
+          className="px-3 py-1.5 rounded-lg bg-[#18181B] border border-white/10 hover:bg-[#27272A] text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors flex items-center gap-1.5"
+        >
+          <X className="w-3.5 h-3.5" />
+          <span>Batal</span>
+        </button>
+
+        <button
+          onClick={handleApprove}
+          disabled={isExecuting}
+          className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-xs font-medium text-white transition-colors flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+        >
+          {isExecuting ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Mengeksekusi...</span>
+            </>
+          ) : (
+            <>
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Setujui & Eksekusi</span>
+            </>
+          )}
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 export function ActionCard({ data }: ActionCardProps) {
-  // Extract fields whether flat or nested inside data.data
   const title = data.title || data.data?.title;
   const message = data.message || data.data?.message;
   const items = data.items || data.data?.items || (Array.isArray(data.data) ? data.data : []);
@@ -115,7 +235,6 @@ export function ActionCard({ data }: ActionCardProps) {
                   key={item.id || idx} 
                   className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-[#18181B] border border-white/10 hover:border-white/20 transition-all gap-2"
                 >
-                  {/* Left: Key & Title */}
                   <div className="flex items-center gap-2.5 overflow-hidden min-w-0 flex-1">
                     <span className="text-[11px] font-mono font-semibold text-blue-400 shrink-0 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
                       {item.key || 'TASK'}
@@ -125,7 +244,6 @@ export function ActionCard({ data }: ActionCardProps) {
                     </span>
                   </div>
 
-                  {/* Right: Badges */}
                   <div className="flex items-center gap-2 shrink-0">
                     {item.assignee && !isUUID(item.assignee) && (
                       <span className="text-[10px] px-2 py-0.5 rounded bg-[#111113] text-blue-400 border border-blue-500/20 font-medium">
@@ -176,7 +294,6 @@ export function ActionCard({ data }: ActionCardProps) {
             {rawData && typeof rawData === 'object' && !Array.isArray(rawData) && (
               <div className="grid grid-cols-2 gap-2 mt-3 pt-2 border-t border-white/5 text-xs">
                 {Object.entries(rawData).map(([k, v]) => {
-                  // Skip internal UUID fields or raw null/object values
                   if (k === 'id' || isUUID(String(v)) || typeof v === 'object' || !v) return null;
                   return (
                     <div key={k} className="bg-[#18181B] p-2 rounded-lg border border-white/5">

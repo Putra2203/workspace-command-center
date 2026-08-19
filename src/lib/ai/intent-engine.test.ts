@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseIntent } from './intent-engine';
+import { parseIntent, buildActionPlanFromIntent } from './intent-engine';
 
 describe('parseIntent (regex fallback engine)', () => {
   it('detects list_issues from an Indonesian phrase', () => {
@@ -50,14 +50,36 @@ describe('parseIntent (regex fallback engine)', () => {
   });
 
   it('falls back to get_issue when an issue key is present but no known pattern matches', () => {
-    // Characterization test: "pindahkan ... ke Done" only matches the
-    // update_issue pattern when "ke" immediately follows "pindahkan"
-    // (`pindahkan ke`); with a task reference in between, no pattern matches
-    // and the issueKey-present fallback resolves to get_issue instead of
-    // update_issue. Documenting current behavior, not asserting it's ideal.
     const result = parseIntent('pindahkan task PROJECT1-31 ke Done');
     expect(result.intent).toBe('get_issue');
     expect(result.entities.issueKey).toBe('PROJECT1-31');
     expect(result.entities.state).toBe('done');
+  });
+});
+
+describe('buildActionPlanFromIntent', () => {
+  it('builds a valid ActionPlan for single create_issue', () => {
+    const intentResult = parseIntent('buat task fix login bug di PROJ1');
+    const plan = buildActionPlanFromIntent(intentResult);
+    expect(plan).not.toBeNull();
+    expect(plan?.intent).toBe('create_issue');
+    expect(plan?.requiresApproval).toBe(true);
+    expect(plan?.steps.length).toBe(1);
+    expect(plan?.steps[0].operation).toBe('createIssue');
+  });
+
+  it('builds a valid ActionPlan for batch_create_issues', () => {
+    const intentResult = parseIntent('buat 3 task di PROJ1: 1. Fix bug 2. Update UI 3. Test API');
+    const plan = buildActionPlanFromIntent(intentResult);
+    expect(plan).not.toBeNull();
+    expect(plan?.intent).toBe('batch_create_issues');
+    expect(plan?.steps.length).toBe(3);
+    expect(plan?.risk).toBe('medium');
+  });
+
+  it('returns null for read-only intents', () => {
+    const intentResult = parseIntent('tampilkan semua task');
+    const plan = buildActionPlanFromIntent(intentResult);
+    expect(plan).toBeNull();
   });
 });

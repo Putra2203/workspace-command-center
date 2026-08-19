@@ -267,35 +267,35 @@ Goal: ship the UI/data flows that need **zero AI** so the app is useful standalo
 
 Goal: replace today's "parse intent → execute immediately" `/api/ai` route with the PRD's **Plan → Approve → Execute** flow, and split intent classification into a proper AI Router.
 
-### P2-01 — Split AI Router out of `intent-engine.ts`
+### P2-01 — Split AI Router out of `intent-engine.ts` ✅ Done
 - **Priority**: High · **Effort**: L · **Depends on**: —
 - **Problem**: `src/lib/ai/intent-engine.ts` currently conflates classification and response generation in one file with no explicit `none`/`light`/`heavy` routing — it's a single `gemini-2.5-flash` call (or regex fallback) doing everything.
 - **Task**: extract an explicit `classifyIntentTier(intent): 'none' | 'light' | 'heavy'` step (deterministic intents like `list_issues`/`create_issue` with clear parameters → `none`; `search`/`categorize` → `light`; `decompose`/`summarize`/`plan` → `heavy`). This doesn't require multiple models yet (that's P2-05) — it just makes the routing decision explicit and testable instead of implicit in the current if/else chain.
 - **Acceptance criteria**: unit tests assert each existing intent type maps to the expected tier.
 
-### P2-02 — `/api/ai/plan` + `/api/ai/execute` (replace immediate-execute `/api/ai`)
+### P2-02 — `/api/ai/plan` + `/api/ai/execute` (replace immediate-execute `/api/ai`) ✅ Done
 - **Priority**: Critical · **Effort**: L · **Depends on**: P0-06, P2-01
 - **Problem**: today `src/app/api/ai/route.ts` parses intent and calls `executeIntent()` (which mutates Plane) in the same request — there is no approval step anywhere.
 - **Task**: split into `POST /api/ai/plan` (parses intent, returns an `ActionPlan` for mutating intents, or a direct answer for read-only/`chat` intents — no execution) and `POST /api/ai/execute` (accepts a previously-returned `ActionPlan`, re-validates it with `ActionPlanSchema` from P0-06, then runs the steps via `executor.ts`'s logic, now `ActionStep`-driven instead of switch-case-per-intent). Keep the old `/api/ai` route working during transition (or alias it to `/plan` immediately-followed-by-`/execute` for read-only intents) so the frontend migration in P2-03 isn't a hard cutover.
 - **Acceptance criteria**: a mutating command (e.g. "update issue X priority") returns a plan from `/api/ai/plan` with `requiresApproval: true` and **does not** touch Plane until `/api/ai/execute` is called with that plan's id.
 
-### P2-03 — `ActionPlan` approval UI
+### P2-03 — `ActionPlan` approval UI ✅ Done
 - **Priority**: High · **Effort**: M · **Depends on**: P2-02
 - **Problem**: `src/components/ai/ActionCard.tsx` is a read-only result renderer today — no Approve/Reject buttons, no pending state.
 - **Task**: add a pending-plan variant to `ActionCard`/`ChatInterface.tsx` showing the plan summary + step diff with Approve/Cancel buttons; Approve calls `/api/ai/execute`, Cancel discards it client-side. Read-only intents (list/search/chat) skip this and render immediately as before.
 - **Acceptance criteria**: manually testing a mutating command in the chat UI shows a preview requiring a click before Plane is modified.
 
-### P2-04 — Mutation audit log → Supabase
+### P2-04 — Mutation audit log → Supabase ✅ Done
 - **Priority**: Medium · **Effort**: M · **Depends on**: P0-04, P2-02
 - **Task**: `action_plan_audit_log` table (id, user_id, intent, summary, approved_at, steps_json, result_json, success_count, fail_count) written on every `/api/ai/execute` call, matching the PRD's sample audit entry format in `domain_service.md`.
 - **Acceptance criteria**: executing a plan creates one audit row queryable in Supabase with correct step counts.
 
-### P2-05 — Model strategy: Flash vs Flash-Lite
+### P2-05 — Model strategy: Flash vs Flash-Lite ✅ Done
 - **Priority**: Low · **Effort**: S · **Depends on**: P2-01
 - **Task**: introduce a second Gemini model call for `light`-tier intents (e.g. `gemini-2.5-flash-lite` if/when available on the account's free tier — verify exact current model name against Google's docs at implementation time, since the PRD's "Flash-Lite 3.1" naming may be stale) while keeping the existing `gemini-2.5-flash` for `heavy`-tier intents. This is explicitly deprioritized (`Low`) versus the approval-flow work above, since a single model works today.
 - **Acceptance criteria**: `light`-tier intents route to the lite model, `heavy`-tier to the full model, verified via logged `model` field per call.
 
-### P2-06 — AI response JSON schema validation
+### P2-06 — AI response JSON schema validation ✅ Done
 - **Priority**: High · **Effort**: S · **Depends on**: P0-06
 - **Task**: every Gemini JSON-mode response in `intent-engine.ts`/the new `/api/ai/plan` handler gets run through `ActionPlanSchema.safeParse()` (or the appropriate intent schema) before being trusted; malformed output is rejected with a user-facing error instead of silently breaking downstream code.
 - **Acceptance criteria**: feeding a deliberately malformed mock Gemini response results in a graceful rejection, not a crash or silent bad-data pass-through.

@@ -14,3 +14,18 @@ model QueryCache {
 
   @@map("query_cache")
 }
+
+model ActionPlanAuditLog {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  intent       String
+  summary      String
+  risk         String
+  approvedAt   DateTime @default(now()) @map("approved_at")
+  stepsJson    Json     @map("steps_json")
+  resultJson   Json     @map("result_json")
+  successCount Int      @map("success_count")
+  failCount    Int      @map("fail_count")
+
+  @@map("action_plan_audit_log")
+}

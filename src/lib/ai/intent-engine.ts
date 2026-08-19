@@ -1,4 +1,6 @@
-import { IntentResult, ConversationContext } from '@/types/ai';
+import { IntentResult, ConversationContext, ActionPlan, ActionStep } from '@/types/ai';
+import { ActionPlanSchema } from '@/types/schemas';
+import { classifyIntentTier, selectModelForTier } from './router';
 
 /**
  * Parses user input to determine the intent and extract relevant entities.
@@ -7,7 +9,6 @@ import { IntentResult, ConversationContext } from '@/types/ai';
 export async function parseIntentAsync(message: string, context?: ConversationContext): IntentResultAsync {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
-  // First check if it's a direct greeting or conversational query
   const lowerMsg = message.trim().toLowerCase();
   const isGreeting = /^(hai|halo|hi|hey|hello|p|tes|test|apa kabar|siapa kamu|siapa anda|selamat pagi|selamat siang|selamat malam)\b/i.test(lowerMsg);
 
@@ -16,11 +17,13 @@ export async function parseIntentAsync(message: string, context?: ConversationCo
       const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey });
 
-      // If it's a casual chat or non-command query, generate a friendly AI conversational reply directly
       const intentCheck = parseIntent(message, context);
+      const tier = classifyIntentTier(intentCheck.intent);
+      const model = selectModelForTier(tier);
+
       if (isGreeting || intentCheck.intent === 'unknown' || intentCheck.intent === 'chat' || intentCheck.intent === 'help') {
         const chatResponse = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model,
           contents: `You are Plane AI Command Center, an intelligent assistant for project management.
 Respond to the user naturally, warmly, and helpfully in Indonesian (or the language of their prompt).
 If they say hello or ask a question, greet them and briefly explain that you can manage Plane tasks (list tasks, create tasks, update issue status, bulk tasks).
@@ -36,9 +39,8 @@ User message: "${message}"`,
         };
       }
 
-      // Otherwise parse command intents via Gemini JSON
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model,
         contents: `You are an AI intent parser for Plane Project Management. Analyze the user prompt and return JSON with intent and entities.
 Valid intents: "list_projects", "list_issues", "create_issue", "batch_create_issues", "get_issue", "update_issue", "help", "chat", "unknown".
 
@@ -65,7 +67,6 @@ Active Project Context: "${context?.activeProjectKey || ''}"`,
     }
   }
 
-  // Fallback if no Gemini key or error
   const fallbackResult = parseIntent(message, context);
   if (isGreeting || fallbackResult.intent === 'unknown') {
     return {
@@ -91,7 +92,6 @@ export function parseIntent(message: string, context?: ConversationContext): Int
     confidence: 0,
   };
 
-  // 1. Extract Project key (e.g. a Plane project identifier like PROJECT1)
   const projectMatch = message.match(/\b([A-Z0-9]{2,12})\b/);
   if (projectMatch && !projectMatch[1].includes('-')) {
     result.entities.projectKey = projectMatch[1];
@@ -99,13 +99,11 @@ export function parseIntent(message: string, context?: ConversationContext): Int
     result.entities.projectKey = context.activeProjectKey;
   }
 
-  // 2. Extract Issue key (e.g. PROJECT1-31)
   const issueMatch = message.match(/\b([A-Z0-9]+-\d+)\b/i);
   if (issueMatch) {
     result.entities.issueKey = issueMatch[1].toUpperCase();
   }
 
-  // 3. Extract Priority
   const priorities = ['urgent', 'high', 'medium', 'low', 'none', 'tinggi', 'rendah', 'sedang'];
   for (const prio of priorities) {
     if (lowerMessage.includes(prio)) {
@@ -117,7 +115,6 @@ export function parseIntent(message: string, context?: ConversationContext): Int
     }
   }
 
-  // 4. Extract State
   const states = ['done', 'in progress', 'todo', 'backlog', 'cancelled', 'selesai', 'sedang berjalan'];
   for (const state of states) {
     if (lowerMessage.includes(state)) {
@@ -126,7 +123,6 @@ export function parseIntent(message: string, context?: ConversationContext): Int
     }
   }
 
-  // 5. Check for Bulk Multi-Task Creation (Numbering like 1., 2., 3. or newlines/bullets)
   const isCreationPrompt = /buat|create|masukin|tambah|input|new task|new issue/i.test(lowerMessage);
   if (isCreationPrompt) {
     const listItems = message
@@ -158,7 +154,6 @@ export function parseIntent(message: string, context?: ConversationContext): Int
     }
   }
 
-  // Intent patterns
   const patterns = {
     list_issues: /list (?:all )?(?:issues|tasks|tickets)|tampilkan (?:semua )?(?:issue|task|tiket)|show (?:my )?(?:issues|tasks)|tugas saya|daftar task/i,
     create_issue: /create (?:an )?(?:issue|task|ticket)|buat (?:sebuah )?(?:issue|task|tiket|tugas)|new (?:issue|task)/i,
@@ -195,4 +190,89 @@ export function parseIntent(message: string, context?: ConversationContext): Int
   }
 
   return result;
+}
+
+/**
+ * Builds an ActionPlan for mutating intents so that changes can be previewed
+ * and explicitly approved before modifying workspace data.
+ */
+export function buildActionPlanFromIntent(
+  intentResult: IntentResult,
+  context?: ConversationContext
+): ActionPlan | null {
+  const targetProject = intentResult.entities.projectKey || context?.activeProjectKey || 'PROJECT';
+  const planId = `plan_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+  if (intentResult.intent === 'create_issue') {
+    const title = intentResult.entities.title || 'New Task';
+    const changes: Record<string, unknown> = { title };
+    if (intentResult.entities.priority) changes.priority = intentResult.entities.priority;
+    if (intentResult.entities.state) changes.state = intentResult.entities.state;
+
+    const plan: ActionPlan = {
+      id: planId,
+      intent: 'create_issue',
+      summary: `Buat task "${title}" di project ${targetProject}`,
+      risk: 'low',
+      requiresApproval: true,
+      steps: [
+        {
+          operation: 'createIssue',
+          target: targetProject,
+          changes,
+        },
+      ],
+    };
+
+    const validated = ActionPlanSchema.safeParse(plan);
+    return validated.success ? validated.data : null;
+  }
+
+  if (intentResult.intent === 'batch_create_issues') {
+    const titles = intentResult.entities.titles || [];
+    const steps: ActionStep[] = titles.map(t => ({
+      operation: 'createIssue',
+      target: targetProject,
+      changes: { title: t },
+    }));
+
+    const plan: ActionPlan = {
+      id: planId,
+      intent: 'batch_create_issues',
+      summary: `Buat ${titles.length} task sekaligus di project ${targetProject}`,
+      risk: 'medium',
+      requiresApproval: true,
+      steps,
+    };
+
+    const validated = ActionPlanSchema.safeParse(plan);
+    return validated.success ? validated.data : null;
+  }
+
+  if (intentResult.intent === 'update_issue') {
+    const targetIssue = intentResult.entities.issueKey || 'ISSUE';
+    const changes: Record<string, unknown> = {};
+    if (intentResult.entities.priority) changes.priority = intentResult.entities.priority;
+    if (intentResult.entities.state) changes.state = intentResult.entities.state;
+
+    const plan: ActionPlan = {
+      id: planId,
+      intent: 'update_issue',
+      summary: `Perbarui task ${targetIssue}${changes.state ? ` -> ${changes.state}` : ''}${changes.priority ? ` (${changes.priority} priority)` : ''}`,
+      risk: 'low',
+      requiresApproval: true,
+      steps: [
+        {
+          operation: 'updateIssue',
+          target: targetIssue,
+          changes,
+        },
+      ],
+    };
+
+    const validated = ActionPlanSchema.safeParse(plan);
+    return validated.success ? validated.data : null;
+  }
+
+  return null;
 }
