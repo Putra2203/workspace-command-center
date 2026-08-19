@@ -6,3 +6,11 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model QueryCache {
+  key       String   @id
+  value     Json
+  expiresAt DateTime @map("expires_at")
+
+  @@map("query_cache")
+}

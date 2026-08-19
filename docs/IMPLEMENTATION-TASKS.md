@@ -177,17 +177,17 @@ Goal: remove hardcoded values, stand up the domain-service layer skeleton and `A
 - **Implementation notes**: the old `fetchProjects`/`loading` state and its mount-time `useEffect` were replaced by the query; a separate small effect still handles "keep the last-used project if still valid, else fall back to `projects[0]`" (a side effect reacting to fetched data, not the fetch itself, so it stays outside `queryFn`). Installed `@tanstack/react-query-devtools@5.101.4` and wired it into `QueryProvider` (dev-only, matching the acceptance criteria's literal mention of devtools) — not previously installed. The header's manual refresh button now calls both `refetchProjects()` and the existing `fetchProjectData()`.
 - **Acceptance criteria**: project list loads via TanStack Query devtools showing a cached query; manual refresh (React Query `refetch`) works without a full page reload.
 
-### P0-10 — Persistent query-cache table in Supabase
+### P0-10 — Persistent query-cache table in Supabase ✅ Done
 - **Priority**: Medium · **Effort**: M · **Depends on**: P0-04, P0-08
 - **Task**: create a `query_cache` table (key, value JSON, expires_at) via the ORM from P0-04. Replace (or front) the in-memory `TTLCache` in `PlaneService` with a lookup against this table for the cacheable keys already identified in `client.ts` (`users_me`, `projects_{slug}`, `states_*`, `members_*`, `labels_*`, `cycles_*`, `modules_*`), so caching survives across serverless invocations, not just within one warm instance.
 - **Acceptance criteria**: restarting the dev server (simulating a cold serverless instance) still serves a cached `listProjects()` response within the TTL window, sourced from Supabase not memory.
 
-### P0-11 — Baseline test setup ⏳ Partially done
+### P0-11 — Baseline test setup ✅ Done
 - **Priority**: Low · **Effort**: S · **Depends on**: —
 - **Problem**: no test framework exists at all (no jest/vitest config, no `*.test.ts`, no test npm script).
 - **Already done (pulled forward by P0-06)**: P0-06's acceptance criteria required a real unit test for `ActionPlanSchema`, which isn't possible without a test runner — so Vitest (`^4.1.11`), `vitest.config.mts` (with the `@/*` alias resolved for tests), and the `npm test` script (`vitest run`) were added then, along with `src/types/schemas.test.ts` (2 passing tests: valid/invalid `ActionPlan`).
-- **Remaining for this task**: first unit tests for `src/lib/ai/intent-engine.ts`'s regex fallback `parseIntent()` (deterministic, easy to test).
-- **Acceptance criteria**: `npm test` runs and passes with ≥2 real test cases. *(Already satisfied by the schema tests alone — this task is really just "also test `parseIntent()`" now.)*
+- **This task**: added `src/lib/ai/intent-engine.test.ts` (9 tests) covering `parseIntent()`'s deterministic paths — `list_issues`/`list_projects`/`help` detection, project-key + single-issue creation, batch creation from a numbered list, issue-key extraction, Indonesian priority-keyword mapping, and the zero-confidence `unknown` fallback for gibberish. One test documents a discovered quirk rather than fixing it (out of scope here): `"pindahkan task X ke Done"` resolves to `get_issue` not `update_issue`, because the `update_issue` pattern only matches literal `"pindahkan ke"` (no words in between) — characterized as current behavior, not asserted as correct.
+- **Acceptance criteria**: `npm test` runs and passes with ≥2 real test cases — suite is now 24 tests across 5 files (schemas, AppError, PlaneClient caching, QueryCache, intent-engine).
 
 ---
 

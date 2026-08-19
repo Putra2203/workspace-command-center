@@ -12,45 +12,7 @@ import {
   PlaneModule,
   PlaneUser
 } from '@/types/plane';
-
-/**
- * Simple TTL Cache for memory storage
- */
-class TTLCache<K, V> {
-  private cache = new Map<K, { value: V; expiry: number }>();
-  
-  constructor(private ttlMs: number) {}
-
-  get(key: K): V | undefined {
-    const item = this.cache.get(key);
-    if (!item) return undefined;
-    if (Date.now() > item.expiry) {
-      this.cache.delete(key);
-      return undefined;
-    }
-    return item.value;
-  }
-
-  set(key: K, value: V): void {
-    this.cache.set(key, { value, expiry: Date.now() + this.ttlMs });
-  }
-
-  delete(key: K): void {
-    this.cache.delete(key);
-  }
-
-  deletePrefix(prefix: string): void {
-    for (const key of this.cache.keys()) {
-      if (typeof key === 'string' && key.startsWith(prefix)) {
-        this.cache.delete(key);
-      }
-    }
-  }
-
-  clear(): void {
-    this.cache.clear();
-  }
-}
+import { QueryCache } from '@/infrastructure/cache/QueryCache';
 
 /**
  * Server-side PlaneService for making direct HTTP calls to the Plane API.
@@ -58,7 +20,7 @@ class TTLCache<K, V> {
 export class PlaneService {
   private client: AxiosInstance;
   public defaultWorkspaceSlug: string;
-  private cache = new TTLCache<string, any>(60000); // 1 minute TTL
+  private cache = new QueryCache(60000); // 1 minute TTL, Supabase-backed
 
   constructor() {
     const apiHost = (process.env.PLANE_API_HOST || process.env.PLANE_API_URL || 'https://api.plane.so').replace(/\/$/, '');
@@ -226,11 +188,11 @@ export class PlaneService {
    */
   async getMe(): Promise<PlaneUser> {
     const cacheKey = 'users_me';
-    const cached = this.cache.get(cacheKey);
+    const cached = await this.cache.get<PlaneUser>(cacheKey);
     if (cached) return cached;
 
     const response = await this.client.get('/users/me/');
-    this.cache.set(cacheKey, response.data);
+    await this.cache.set(cacheKey, response.data);
     return response.data;
   }
 
@@ -241,13 +203,13 @@ export class PlaneService {
     const slug = this.defaultWorkspaceSlug;
     const cacheKey = `projects_${slug}`;
     if (!bypassCache) {
-      const cached = this.cache.get(cacheKey);
+      const cached = await this.cache.get<PlaneProject[]>(cacheKey);
       if (cached) return cached;
     }
 
     const response = await this.client.get(`/workspaces/${slug}/projects/`);
     const projects: PlaneProject[] = response.data.results || response.data;
-    this.cache.set(cacheKey, projects);
+    await this.cache.set(cacheKey, projects);
     return projects;
   }
 
@@ -269,13 +231,13 @@ export class PlaneService {
     const realProjectId = await this.resolveProjectId(projectId);
     const cacheKey = `states_${slug}_${realProjectId}`;
     if (!bypassCache) {
-      const cached = this.cache.get(cacheKey);
+      const cached = await this.cache.get<PlaneState[]>(cacheKey);
       if (cached) return cached;
     }
 
     const response = await this.client.get(`/workspaces/${slug}/projects/${realProjectId}/states/`);
     const states: PlaneState[] = response.data.results || response.data;
-    this.cache.set(cacheKey, states);
+    await this.cache.set(cacheKey, states);
     return states;
   }
 
@@ -286,12 +248,12 @@ export class PlaneService {
     const slug = this.defaultWorkspaceSlug;
     const realProjectId = await this.resolveProjectId(projectId);
     const cacheKey = `members_${slug}_${realProjectId}`;
-    const cached = this.cache.get(cacheKey);
+    const cached = await this.cache.get<PlaneMember[]>(cacheKey);
     if (cached) return cached;
 
     const response = await this.client.get(`/workspaces/${slug}/projects/${realProjectId}/members/`);
     const members: PlaneMember[] = response.data.results || response.data;
-    this.cache.set(cacheKey, members);
+    await this.cache.set(cacheKey, members);
     return members;
   }
 
@@ -344,7 +306,7 @@ export class PlaneService {
     }
 
     const response = await this.client.post(`/workspaces/${slug}/projects/${realProjectId}/issues/`, data);
-    this.cache.deletePrefix(`issues_${slug}_${realProjectId}`);
+    await this.cache.deletePrefix(`issues_${slug}_${realProjectId}`);
     return response.data;
   }
 
@@ -362,7 +324,7 @@ export class PlaneService {
     }
 
     const response = await this.client.patch(`/workspaces/${slug}/projects/${realProjectId}/issues/${realIssueId}/`, data);
-    this.cache.deletePrefix(`issues_${slug}_${realProjectId}`);
+    await this.cache.deletePrefix(`issues_${slug}_${realProjectId}`);
     return response.data;
   }
 
@@ -374,7 +336,7 @@ export class PlaneService {
     const realProjectId = await this.resolveProjectId(projectId);
     const realIssueId = await this.resolveIssueId(realProjectId, issueId);
     await this.client.delete(`/workspaces/${slug}/projects/${realProjectId}/issues/${realIssueId}/`);
-    this.cache.deletePrefix(`issues_${slug}_${realProjectId}`);
+    await this.cache.deletePrefix(`issues_${slug}_${realProjectId}`);
     return { success: true };
   }
 
@@ -385,12 +347,12 @@ export class PlaneService {
     const slug = this.defaultWorkspaceSlug;
     const realProjectId = await this.resolveProjectId(projectId);
     const cacheKey = `labels_${slug}_${realProjectId}`;
-    const cached = this.cache.get(cacheKey);
+    const cached = await this.cache.get<PlaneLabel[]>(cacheKey);
     if (cached) return cached;
 
     const response = await this.client.get(`/workspaces/${slug}/projects/${realProjectId}/labels/`);
     const labels: PlaneLabel[] = response.data.results || response.data;
-    this.cache.set(cacheKey, labels);
+    await this.cache.set(cacheKey, labels);
     return labels;
   }
 
@@ -425,12 +387,12 @@ export class PlaneService {
     const slug = this.defaultWorkspaceSlug;
     const realProjectId = await this.resolveProjectId(projectId);
     const cacheKey = `cycles_${slug}_${realProjectId}`;
-    const cached = this.cache.get(cacheKey);
+    const cached = await this.cache.get<PlaneCycle[]>(cacheKey);
     if (cached) return cached;
 
     const response = await this.client.get(`/workspaces/${slug}/projects/${realProjectId}/cycles/`);
     const cycles: PlaneCycle[] = response.data.results || response.data;
-    this.cache.set(cacheKey, cycles);
+    await this.cache.set(cacheKey, cycles);
     return cycles;
   }
 
@@ -441,12 +403,12 @@ export class PlaneService {
     const slug = this.defaultWorkspaceSlug;
     const realProjectId = await this.resolveProjectId(projectId);
     const cacheKey = `modules_${slug}_${realProjectId}`;
-    const cached = this.cache.get(cacheKey);
+    const cached = await this.cache.get<PlaneModule[]>(cacheKey);
     if (cached) return cached;
 
     const response = await this.client.get(`/workspaces/${slug}/projects/${realProjectId}/modules/`);
     const modules: PlaneModule[] = response.data.results || response.data;
-    this.cache.set(cacheKey, modules);
+    await this.cache.set(cacheKey, modules);
     return modules;
   }
 }
