@@ -15,9 +15,12 @@ interface Issue {
 interface IssueCardProps {
   issue: Issue;
   onSelect?: (id: string) => void;
+  /** Multi-select for bulk actions (e.g. bulk priority change) — separate from onSelect's single-issue click */
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }
 
-export function IssueCard({ issue, onSelect }: IssueCardProps) {
+export function IssueCard({ issue, onSelect, selected = false, onToggleSelect }: IssueCardProps) {
   const {
     attributes,
     listeners,
@@ -55,10 +58,27 @@ export function IssueCard({ issue, onSelect }: IssueCardProps) {
       {...attributes}
       {...listeners}
       onClick={() => onSelect?.(issue.id)}
-      className={`p-3 bg-[#111113] border border-white/5 rounded-lg cursor-grab active:cursor-grabbing hover:bg-[#18181B] hover:border-white/10 transition-colors shadow-sm group ${
-        isDragging ? 'opacity-50 ring-2 ring-blue-500' : ''
-      }`}
+      className={`relative p-3 bg-[#111113] border rounded-lg cursor-grab active:cursor-grabbing hover:bg-[#18181B] transition-colors shadow-sm group ${
+        selected ? 'border-blue-500/50 ring-1 ring-blue-500/30' : 'border-white/5 hover:border-white/10'
+      } ${isDragging ? 'opacity-50 ring-2 ring-blue-500' : ''}`}
     >
+      {onToggleSelect && (
+        <button
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect(issue.id);
+          }}
+          className={`absolute top-2 right-2 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
+            selected
+              ? 'bg-blue-600 border-blue-600'
+              : 'border-white/20 bg-[#09090B]/60 opacity-0 group-hover:opacity-100'
+          }`}
+          aria-label={selected ? 'Deselect issue' : 'Select issue'}
+        >
+          {selected && <span className="w-1.5 h-1.5 rounded-sm bg-white" />}
+        </button>
+      )}
       <div className="text-[10px] font-medium text-[#71717A] mb-1">{issue.key}</div>
       <div className="text-sm text-[#FAFAFA] line-clamp-2 leading-snug mb-3">{issue.title}</div>
       <div className="flex items-center justify-between mt-auto">

@@ -28,7 +28,8 @@ export async function GET(request: NextRequest) {
       }
       case 'listStates': {
         if (!projectId) return Response.json({ error: 'Missing projectId' }, { status: 400 });
-        const data = await planeService.listStates(projectId);
+        const bypassCache = searchParams.get('bypassCache') === 'true';
+        const data = await planeService.listStates(projectId, bypassCache);
         return Response.json(data);
       }
       case 'listMembers': {

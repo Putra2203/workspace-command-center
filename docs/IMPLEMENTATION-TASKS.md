@@ -238,15 +238,28 @@ Goal: ship the UI/data flows that need **zero AI** so the app is useful standalo
   - Structured search: `CommandPalette` now accepts `issues`/`activeProjectKey` props (passed from `page.tsx`'s already-fetched `issues`, no new fetch) and, whenever the typed query doesn't match a static command, filters issues client-side by title or `PROJECTKEY-N` key, showing up to 8 results merged into the same keyboard-navigable list. Selecting one sets `selectedIssueId` and navigates to the Issues view.
 - **Acceptance criteria**: every command in the palette performs a real action; none are no-ops — verified by inspection (every `action` now has an observable effect) and a live dev-server smoke test (clean load, no runtime errors). No automated test added — this is interactive keyboard/DOM behavior and the project has no component-testing setup (jsdom/RTL) yet; setting that up was judged out of scope for this task, consistent with the same call made in P1-01.
 
-### P1-06 — Bulk action preview (no AI)
+### P1-06 — Bulk action preview (no AI) ✅ Done
 - **Priority**: Medium · **Effort**: M · **Depends on**: P0-06
 - **Task**: for multi-select actions in `KanbanBoard.tsx`/`IssueCard.tsx` (e.g. bulk priority change), build an `ActionPlan` (using the P0-06 types) client-side and show a preview/diff before calling `/api/issues/bulk-update`-equivalent — this is the first place the `ActionPlan` preview UI gets built, ahead of the AI flow reusing it in Phase 2.
-- **Acceptance criteria**: selecting 3 issues and changing priority shows a before/after list requiring explicit confirm before the Plane API is called.
+- **Findings**: confirmed via the graph that neither `KanbanBoard.tsx` nor `IssueCard.tsx` had any multi-select mechanism at all before this task (no selection state, no checkboxes) — built from scratch, not extended.
+- **Implementation**:
+  - `IssueCard.tsx`: added a hover-revealed selection checkbox (`onPointerDown`/`onClick` both `stopPropagation()`'d so it doesn't trigger dnd-kit's drag or the card's existing single-click `onSelect`), plus a blue ring when selected.
+  - `KanbanBoard.tsx`: owns `selectedIds` state; shows a floating bulk-actions bar (priority buttons: urgent/high/medium/low/none) once ≥1 issue is selected.
+  - **New `src/domain/work_items/bulk-actions.ts`**: `buildBulkPriorityActionPlan(issues, newPriority)` — pure function building a real `ActionPlan` (P0-06 types) with one `ActionStep` per issue, each carrying `before`/`after` priority. Deterministic id (issue ids + priority joined), not `Date.now()`, so it's trivially testable.
+  - **New `src/components/board/BulkActionPreview.tsx`**: modal rendering the plan's steps as a before→after diff per issue, with explicit Cancel/Apply buttons — Apply is the only path that calls the Plane API.
+  - **`page.tsx`**: `handleBulkUpdatePriority` applies a confirmed plan by looping the existing single-issue `PATCH /api/plane?action=updateIssue` endpoint per issue (`Promise.allSettled`, no new Plane endpoint), with an optimistic UI update and a refetch fallback if any individual update fails.
+- **Tests**: `bulk-actions.test.ts` (5 tests) — correct before/after diff per step, `requiresApproval`/`risk`, summary text (singular/plural), the plan validates against `ActionPlanSchema` (P0-06), and id determinism.
+- **Acceptance criteria**: selecting 3 issues and changing priority shows a before/after list requiring explicit confirm before the Plane API is called — the preview modal only calls `onBulkUpdatePriority` (which hits the Plane API) from its "Apply" button; there is no path from selection to a Plane API call that skips the modal. Verified via passing unit tests for the plan-building logic and a live dev-server smoke test (clean load, no runtime errors); full interactive click-through wasn't automated since this project has no component-testing setup (jsdom/RTL) yet, per the same judgment call as P1-01/P1-05.
 
-### P1-07 — Dashboard refresh & cache invalidation
+### P1-07 — Dashboard refresh & cache invalidation ✅ Done
 - **Priority**: Medium · **Effort**: S · **Depends on**: P0-10, P1-01
 - **Task**: My Day dashboard auto-refreshes on an interval (e.g. 5 min) or manual refresh button, invalidating the relevant Supabase-backed cache entries from P0-10 rather than always hitting Plane directly.
-- **Acceptance criteria**: manual refresh shows updated counts after an external change in Plane within one refresh cycle.
+- **Scoping note**: of the P0-10-cached entries, only `states` is relevant to My Day's computed metrics (`listIssues` was never cached in the first place, per the P0-08/P0-10 audit) — so cache invalidation here specifically means bypassing the states cache, not every cached entry.
+- **Implementation**:
+  - `PlaneService.listStates` already accepted a `bypassCache` param (unused until now) — threaded it through `GET /api/plane?action=listStates` via a new `?bypassCache=true` query param.
+  - `page.tsx`'s `fetchProjectData(forceRefresh = false)` passes that through when refreshing. Both manual refresh buttons (header icon, Issues-view "Refresh Data") now call `fetchProjectData(true)`.
+  - Added a 5-minute `setInterval` effect (scoped to `activeProjectId`, cleared on unmount/change) that also calls `fetchProjectData(true)` — satisfies the "auto-refreshes on an interval" half of the task, benefiting every view that shares this data (My Day, Board, Issues), not just My Day.
+- **Acceptance criteria**: manual refresh shows updated counts after an external change in Plane within one refresh cycle. Verified live: two consecutive normal `listStates` requests showed cache-hit timing (0.32s miss → 0.011s hit, ~28x faster), then a `bypassCache=true` request returned fresh data immediately — confirming a manual refresh actually skips the cache rather than serving up to 60s of staleness.
 
 ---
 

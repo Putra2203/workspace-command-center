@@ -95,8 +95,12 @@ export default function Home() {
     }
   }, [projects, activeProjectId, setActiveProject]);
 
-  // Fetch issues, states, and members when active project changes
-  const fetchProjectData = useCallback(async () => {
+  // Fetch issues, states, and members when active project changes.
+  // `forceRefresh` bypasses the Supabase-backed states cache (P0-10) — used
+  // by manual refresh and the auto-refresh interval below, since a stale
+  // cached state list (up to 60s old) could otherwise mask an external
+  // Plane change (e.g. a renamed/re-grouped state) for up to a minute.
+  const fetchProjectData = useCallback(async (forceRefresh = false) => {
     if (!activeProjectId) return;
 
     try {
@@ -105,7 +109,7 @@ export default function Home() {
 
       const [issuesRes, statesRes, membersRes] = await Promise.all([
         fetch(`/api/plane?action=listIssues&projectId=${activeProjectId}`),
-        fetch(`/api/plane?action=listStates&projectId=${activeProjectId}`),
+        fetch(`/api/plane?action=listStates&projectId=${activeProjectId}${forceRefresh ? '&bypassCache=true' : ''}`),
         fetch(`/api/plane?action=listMembers&projectId=${activeProjectId}`).catch(() => null),
       ]);
 
@@ -137,6 +141,15 @@ export default function Home() {
   useEffect(() => {
     fetchProjectData();
   }, [fetchProjectData]);
+
+  // Auto-refresh every 5 minutes, bypassing the states cache each time —
+  // keeps My Day (and every other view sharing this data) from silently
+  // going stale between manual refreshes.
+  useEffect(() => {
+    if (!activeProjectId) return;
+    const interval = setInterval(() => fetchProjectData(true), 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [activeProjectId, fetchProjectData]);
 
   // Construct Map of Member UUID -> Human Name
   const memberMap = useMemo(() => {
@@ -209,6 +222,34 @@ export default function Home() {
     }
   }, [activeProjectId, states, fetchProjectData]);
 
+  // Applies a confirmed bulk-priority ActionPlan (see BulkActionPreview) —
+  // reuses the same single-issue update endpoint per issue, no new Plane
+  // endpoint needed.
+  const handleBulkUpdatePriority = useCallback(async (updates: { issueId: string; priority: string }[]) => {
+    if (!activeProjectId) return;
+
+    const priorityById = new Map(updates.map(u => [u.issueId, u.priority]));
+    setIssues(prev => prev.map(issue =>
+      priorityById.has(issue.id) ? { ...issue, priority: priorityById.get(issue.id)! } : issue
+    ));
+
+    const results = await Promise.allSettled(
+      updates.map(({ issueId, priority }) =>
+        fetch('/api/plane?action=updateIssue', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: activeProjectId, issueId, priority }),
+        })
+      )
+    );
+
+    const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok));
+    if (failed.length > 0) {
+      console.error(`Bulk priority update: ${failed.length}/${updates.length} failed`);
+      fetchProjectData();
+    }
+  }, [activeProjectId, fetchProjectData]);
+
   const renderMainContent = () => {
     switch (activeView) {
       case 'day':
@@ -259,6 +300,7 @@ export default function Home() {
             })}
             states={states}
             onMoveIssue={handleMoveIssue}
+            onBulkUpdatePriority={handleBulkUpdatePriority}
           />
         );
       case 'issues':
@@ -275,7 +317,7 @@ export default function Home() {
                 )}
               </h2>
               <button
-                onClick={fetchProjectData}
+                onClick={() => fetchProjectData(true)}
                 disabled={fetchingIssues}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-[#111113] border border-white/10 hover:bg-[#18181B] text-xs text-[#A1A1AA] hover:text-[#FAFAFA] rounded-lg transition-colors"
               >
@@ -436,7 +478,7 @@ export default function Home() {
             <button
               onClick={() => {
                 refetchProjects();
-                fetchProjectData();
+                fetchProjectData(true);
               }}
               disabled={fetchingIssues}
               title="Refresh live project data"
