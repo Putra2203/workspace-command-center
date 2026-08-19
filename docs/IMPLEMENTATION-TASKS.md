@@ -203,15 +203,20 @@ Goal: ship the UI/data flows that need **zero AI** so the app is useful standalo
 - **Tests**: `src/domain/work_items/my-day.test.ts` (10 tests) covers state-UUID resolution, active/done, due-today/overdue bucketing (with an injectable `today` param for determinism), blocked-state detection, non-assigned-user exclusion, and the fail-closed `currentUserId: null` case.
 - **Acceptance criteria**: dashboard renders real counts for the current user's issues across the active project; no LLM call involved. Verified live against the real Plane workspace (10 of 16 issues assigned to the current user, plausible non-zero active/overdue counts) in addition to the unit tests.
 
-### P1-02 — Daily Briefing API (`GET /api/insights/daily`)
+### P1-02 — Daily Briefing API (`GET /api/insights/daily`) ✅ Done
 - **Priority**: Critical · **Effort**: M · **Depends on**: P0-05, P1-01
 - **Task**: new route returning `{ summary: string | null, metrics: { active, dueToday, overdue, blocked }, recommendations: { taskId, reason }[] }`. `summary` stays `null`/omitted for now (AI text generation is Phase 2+) — this task only ships the deterministic `metrics`/`recommendations` shape. Implement as `InsightService.getDailyBriefing()` under `application/services/`.
-- **Acceptance criteria**: route returns correct shape and numbers verified against a manual count in the Plane UI for a test project.
+- **Implementation**: `InsightService.getDailyBriefing(projectId, currentUserId)` reuses P1-01's `computeMyDayBuckets` domain function for `metrics` (same numbers, same code path as the My Day dashboard — no duplicated logic), and builds `recommendations` from the overdue/due-today buckets it already returns (`reason: 'Overdue'` / `'Due today'`). Real priority scoring is explicitly deferred to P1-03. `GET /api/insights/daily?projectId=...` resolves the current user server-side the same way `/api/ai` does (P0-01's pattern), failing closed to `currentUserId: null` rather than erroring the whole request if identity resolution fails.
+- **Tests**: `InsightService.test.ts` (4 tests) — `summary` stays null, metrics match the shared domain logic, recommendations carry the right `taskId`/`reason` pairs and exclude issues not assigned to the current user, and the service calls `listIssues`/`listStates` with the given project.
+- **Acceptance criteria**: route returns correct shape and numbers verified against a manual count in the Plane UI for a test project. Verified live against the real Plane workspace: `GET /api/insights/daily?projectId=...` returned `{active: 1, dueToday: 0, overdue: 1, blocked: 0}` — an exact match with P1-01's independent live cross-check for the same project — plus one correctly-surfaced `Overdue` recommendation.
 
-### P1-03 — Deterministic priority scoring
+### P1-03 — Deterministic priority scoring ✅ Done
 - **Priority**: Critical · **Effort**: M · **Depends on**: —
 - **Task**: pure function `scoreTask(issue): number` (e.g. in `domain/work_items/scoring.ts`) combining urgency (due date proximity), priority field, and blocker count into one comparable score, used to power "Recommended Next Task" in the My Day dashboard.
-- **Acceptance criteria**: unit test asserts a known overdue+high-priority+blocking task scores higher than a low-priority task with no due date (mirrors the PRD's sample test case in `testing.md`).
+- **Implementation**: `scoreTask({ dueDate, priority, blockerCount }, today?)` = priority weight (urgent=8...none=0) + urgency (due-today=10, +1 per day overdue unbounded, -1 per day in the future floored at 0) + `blockerCount * 3`. `today` is injectable for deterministic tests, same pattern as P1-01's `computeMyDayBuckets`.
+- **Wired into the dashboard** (not just left as an unused pure function, since the task explicitly names its purpose): added a "Recommended Next" section to `MyDayDashboard.tsx`, ranking `computeMyDayBuckets`'s new `activeIssues` list by score and showing the top 3. `blockerCount` is always `0` in this integration — Plane issue-relations data (which issues block which) isn't fetched anywhere in this app yet, so scoring currently ranks on urgency + priority alone; documented inline rather than fabricated.
+- **Tests**: `scoring.test.ts` (7 tests) — including the exact PRD-mirrored case (overdue + high-priority + blocking beats low-priority + no due date), priority ordering, due-today vs next-week, more-overdue vs less-overdue, no-due-date treated as zero urgency, blocker-count monotonicity, and determinism.
+- **Acceptance criteria**: unit test asserts a known overdue+high-priority+blocking task scores higher than a low-priority task with no due date (mirrors the PRD's sample test case in `testing.md`) — see the first test case above.
 
 ### P1-04 — Overdue/blocked task queries
 - **Priority**: High · **Effort**: S · **Depends on**: P0-05

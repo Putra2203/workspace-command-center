@@ -24,6 +24,8 @@ export interface MyDayBuckets<T extends WorkItemLike> {
   dueTodayIssues: T[];
   overdueIssues: T[];
   blockedIssues: T[];
+  /** Current user's not-done issues — the candidate pool for "Recommended Next Task" scoring */
+  activeIssues: T[];
 }
 
 export function isDoneGroup(group?: string): boolean {
@@ -74,12 +76,12 @@ export function computeMyDayBuckets<T extends WorkItemLike>(
   const dueTodayIssues: T[] = [];
   const overdueIssues: T[] = [];
   const blockedIssues: T[] = [];
-  let active = 0;
+  const activeIssues: T[] = [];
 
   for (const issue of myIssues) {
     const state = resolveIssueState(issue, stateMap);
     const done = isDoneGroup(state?.group);
-    if (!done) active += 1;
+    if (!done) activeIssues.push(issue);
     if (isBlockedState(state)) blockedIssues.push(issue);
 
     if (issue.target_date) {
@@ -90,9 +92,15 @@ export function computeMyDayBuckets<T extends WorkItemLike>(
   }
 
   return {
-    metrics: { active, dueToday: dueTodayIssues.length, overdue: overdueIssues.length, blocked: blockedIssues.length },
+    metrics: {
+      active: activeIssues.length,
+      dueToday: dueTodayIssues.length,
+      overdue: overdueIssues.length,
+      blocked: blockedIssues.length,
+    },
     dueTodayIssues,
     overdueIssues,
     blockedIssues,
+    activeIssues,
   };
 }
