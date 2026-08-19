@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { 
-  Sparkles, 
-  TerminalSquare, 
-  LayoutGrid, 
-  ListTodo, 
-  RefreshCw, 
+import {
+  Sparkles,
+  Sun,
+  TerminalSquare,
+  LayoutGrid,
+  ListTodo,
+  RefreshCw,
   BarChart3,
   ChevronLeft,
   ChevronRight,
@@ -59,6 +60,7 @@ export function Sidebar({ projects }: SidebarProps) {
   }, []);
 
   const navItems = [
+    { id: 'day', label: 'My Day', icon: Sun },
     { id: 'command', label: 'Command Center', icon: TerminalSquare },
     { id: 'board', label: 'Board', icon: LayoutGrid },
     { id: 'issues', label: 'Issues', icon: ListTodo },

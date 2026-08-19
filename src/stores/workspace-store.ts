@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type ViewType = 'command' | 'board' | 'issues' | 'cycles' | 'analytics';
+export type ViewType = 'day' | 'command' | 'board' | 'issues' | 'cycles' | 'analytics';
 export type UserScope = 'my_tasks' | 'all';
 
 export interface UserProfile {
@@ -77,7 +77,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   sidebarOpen: true,
   commandPaletteOpen: false,
   selectedIssueId: null,
-  activeView: 'command',
+  activeView: 'day',
   theme: 'dark',
   userScope: 'my_tasks',
   currentUser: null,

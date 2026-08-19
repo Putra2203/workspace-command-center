@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { MyDayDashboard } from '@/components/dashboard/MyDayDashboard';
 import { ChatInterface } from '@/components/ai/ChatInterface';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { CommandPalette } from '@/components/layout/CommandPalette';
@@ -199,6 +200,15 @@ export default function Home() {
 
   const renderMainContent = () => {
     switch (activeView) {
+      case 'day':
+        return (
+          <MyDayDashboard
+            issues={issues}
+            states={states}
+            currentUserId={currentUser?.id || null}
+            activeProjectKey={activeProjectKey}
+          />
+        );
       case 'command':
         return <ChatInterface onActionExecuted={fetchProjectData} />;
       case 'board':
@@ -362,6 +372,7 @@ export default function Home() {
         <header className="h-14 border-b border-white/5 flex items-center justify-between px-4 bg-[#09090B] shrink-0">
           <div className="flex items-center gap-3">
             <h1 className="text-sm font-medium text-[#FAFAFA]">
+              {activeView === 'day' && 'My Day'}
               {activeView === 'command' && 'AI Command Center'}
               {activeView === 'board' && 'Kanban Board'}
               {activeView === 'issues' && 'Issue Backlog'}

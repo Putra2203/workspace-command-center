@@ -1,0 +1,98 @@
+export interface PlaneStateLike {
+  id?: string;
+  name: string;
+  group: string;
+}
+
+export interface WorkItemLike {
+  id: string;
+  target_date?: string;
+  assignees?: string[];
+  state?: unknown;
+  state_detail?: { id?: string; name: string; group: string };
+}
+
+export interface MyDayMetrics {
+  active: number;
+  dueToday: number;
+  overdue: number;
+  blocked: number;
+}
+
+export interface MyDayBuckets<T extends WorkItemLike> {
+  metrics: MyDayMetrics;
+  dueTodayIssues: T[];
+  overdueIssues: T[];
+  blockedIssues: T[];
+}
+
+export function isDoneGroup(group?: string): boolean {
+  return group === 'completed' || group === 'cancelled';
+}
+
+export function isBlockedState(state?: PlaneStateLike): boolean {
+  return (state?.name || '').toLowerCase().includes('block');
+}
+
+export function buildStateMap(states: PlaneStateLike[]): Map<string, PlaneStateLike> {
+  const map = new Map<string, PlaneStateLike>();
+  for (const s of states) {
+    if (s.id) map.set(s.id, s);
+  }
+  return map;
+}
+
+/**
+ * Plane's issue list only returns a bare state UUID (or occasionally an
+ * embedded object) — never a joined `state_detail` — so resolve it against
+ * the separately-fetched `states` list, same as KanbanBoard does.
+ */
+export function resolveIssueState<T extends WorkItemLike>(
+  issue: T,
+  stateMap: Map<string, PlaneStateLike>
+): PlaneStateLike | undefined {
+  const stateId =
+    typeof issue.state === 'string'
+      ? issue.state
+      : (issue.state as { id?: string } | undefined)?.id || issue.state_detail?.id;
+  return (stateId ? stateMap.get(stateId) : undefined) || issue.state_detail;
+}
+
+/**
+ * `today` defaults to the real date but can be overridden for deterministic
+ * testing — a 'YYYY-MM-DD' string, matching Plane's `target_date` format.
+ */
+export function computeMyDayBuckets<T extends WorkItemLike>(
+  issues: T[],
+  states: PlaneStateLike[],
+  currentUserId: string | null,
+  today: string = new Date().toISOString().slice(0, 10)
+): MyDayBuckets<T> {
+  const stateMap = buildStateMap(states);
+  const myIssues = currentUserId ? issues.filter(i => i.assignees?.includes(currentUserId)) : [];
+
+  const dueTodayIssues: T[] = [];
+  const overdueIssues: T[] = [];
+  const blockedIssues: T[] = [];
+  let active = 0;
+
+  for (const issue of myIssues) {
+    const state = resolveIssueState(issue, stateMap);
+    const done = isDoneGroup(state?.group);
+    if (!done) active += 1;
+    if (isBlockedState(state)) blockedIssues.push(issue);
+
+    if (issue.target_date) {
+      const dateStr = issue.target_date.slice(0, 10);
+      if (!done && dateStr < today) overdueIssues.push(issue);
+      else if (dateStr === today) dueTodayIssues.push(issue);
+    }
+  }
+
+  return {
+    metrics: { active, dueToday: dueTodayIssues.length, overdue: overdueIssues.length, blocked: blockedIssues.length },
+    dueTodayIssues,
+    overdueIssues,
+    blockedIssues,
+  };
+}

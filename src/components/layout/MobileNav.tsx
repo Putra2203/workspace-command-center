@@ -7,7 +7,7 @@ export function MobileNav() {
   const { activeView, setActiveView } = useWorkspaceStore();
 
   const navItems = [
-    { id: 'home', label: 'Home', icon: Home, action: () => {} },
+    { id: 'day', label: 'My Day', icon: Home, action: () => setActiveView('day') },
     { id: 'board', label: 'Board', icon: LayoutGrid, action: () => setActiveView('board') },
     { id: 'command', label: 'AI', icon: TerminalSquare, action: () => setActiveView('command'), isPrimary: true },
     { id: 'issues', label: 'Issues', icon: ListTodo, action: () => setActiveView('issues') },

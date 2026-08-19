@@ -195,10 +195,13 @@ Goal: remove hardcoded values, stand up the domain-service layer skeleton and `A
 
 Goal: ship the UI/data flows that need **zero AI** so the app is useful standalone. Depends on Phase 0's `CurrentUserContext`, `ProjectService` pattern, and TanStack Query adoption.
 
-### P1-01 — My Day dashboard
+### P1-01 — My Day dashboard ✅ Done
 - **Priority**: Critical · **Effort**: L · **Depends on**: P0-01, P0-09
 - **Task**: new dashboard view showing counts (due today, overdue, blocked, active) computed client- or server-side from `listIssues()` data, using `CurrentUserContext` for "my" filtering (not the old hardcoded UUID).
-- **Acceptance criteria**: dashboard renders real counts for the current user's issues across the active project; no LLM call involved.
+- **Implementation**: new `'day'` view (now the default landing view, replacing `'command'`) added to `ViewType`; `src/components/dashboard/MyDayDashboard.tsx` renders 4 metric cards plus Due Today/Overdue/Blocked issue lists. Wired into `Sidebar.tsx` (new "My Day" nav item) and `MobileNav.tsx` (the dormant no-op "Home" button was clearly meant for exactly this — wired it up instead of adding a new slot).
+- **Bug caught via live-data verification, not assumption**: the first implementation read `issue.state_detail?.group`/`.name` for done/blocked detection, copying an assumption from how other views seemed to use it. Hitting the real `listIssues` API directly showed Plane's issue list only returns a bare state **UUID** (`issue.state`) — `state_detail` is never actually populated by this app's fetch path, only `KanbanBoard` does its own join against the separately-fetched `states` list. Fixed by extracting the calculation into `src/domain/work_items/my-day.ts` (`computeMyDayBuckets`), which resolves state the same way `KanbanBoard` does — cross-referencing `states` by ID — with `state_detail` only as a last-resort fallback.
+- **Tests**: `src/domain/work_items/my-day.test.ts` (10 tests) covers state-UUID resolution, active/done, due-today/overdue bucketing (with an injectable `today` param for determinism), blocked-state detection, non-assigned-user exclusion, and the fail-closed `currentUserId: null` case.
+- **Acceptance criteria**: dashboard renders real counts for the current user's issues across the active project; no LLM call involved. Verified live against the real Plane workspace (10 of 16 issues assigned to the current user, plausible non-zero active/overdue counts) in addition to the unit tests.
 
 ### P1-02 — Daily Briefing API (`GET /api/insights/daily`)
 - **Priority**: Critical · **Effort**: M · **Depends on**: P0-05, P1-01
