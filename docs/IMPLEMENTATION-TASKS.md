@@ -218,10 +218,13 @@ Goal: ship the UI/data flows that need **zero AI** so the app is useful standalo
 - **Tests**: `scoring.test.ts` (7 tests) — including the exact PRD-mirrored case (overdue + high-priority + blocking beats low-priority + no due date), priority ordering, due-today vs next-week, more-overdue vs less-overdue, no-due-date treated as zero urgency, blocker-count monotonicity, and determinism.
 - **Acceptance criteria**: unit test asserts a known overdue+high-priority+blocking task scores higher than a low-priority task with no due date (mirrors the PRD's sample test case in `testing.md`) — see the first test case above.
 
-### P1-04 — Overdue/blocked task queries
+### P1-04 — Overdue/blocked task queries ✅ Done
 - **Priority**: High · **Effort**: S · **Depends on**: P0-05
 - **Task**: add filter helpers/endpoints for overdue (`dueDate < today && state !== done`) and blocked tasks, reusing `listIssues()` with client-side filtering (no new Plane endpoints needed).
-- **Acceptance criteria**: My Day dashboard sections for "Overdue" and "Blocked" populate correctly.
+- **Already substantially done by P1-01**: `computeMyDayBuckets` already buckets overdue/blocked issues for the My Day dashboard, and was already live-verified against real data. What P1-04 actually adds: the task's own wording ("filter helpers... for overdue and blocked tasks") reads as project-wide, reusable helpers — not the assignee-scoped "my day" bucketing P1-01 shipped. Added `filterOverdueIssues(issues, states, today?)` and `filterBlockedIssues(issues, states)` to `src/domain/work_items/my-day.ts` (no `currentUserId` param — usable independent of "my day" scoping), and refactored `computeMyDayBuckets` to call them internally instead of duplicating the filtering logic inline.
+- **Given real, visible usage** (not left unused): wired both into the plain "Issues" list view in `page.tsx` (which shows all-or-mine per the existing scope toggle, not just My Day) as "Overdue"/"Blocked" badges — computed project-wide over the full `issues` list regardless of the assignee-scope toggle, since these are genuinely project-wide facts.
+- **Tests**: 5 new tests in `my-day.test.ts` for the two standalone helpers (overdue regardless of assignee, done issues excluded even if past-due, no-due-date excluded, blocked regardless of assignee, non-blocked state excluded).
+- **Acceptance criteria**: My Day dashboard sections for "Overdue" and "Blocked" populate correctly — already true since P1-01 (re-verified: the refactor preserved all existing test assertions). Additionally cross-checked the new project-wide filters against live Plane data.
 
 ### P1-05 — Wire Universal Command palette to real actions
 - **Priority**: High · **Effort**: M · **Depends on**: P0-02

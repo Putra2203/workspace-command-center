@@ -9,6 +9,7 @@ import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { CommandPalette } from '@/components/layout/CommandPalette';
 import { MobileNav } from '@/components/layout/MobileNav';
 import { useWorkspaceStore } from '@/stores/workspace-store';
+import { filterOverdueIssues, filterBlockedIssues } from '@/domain/work_items/my-day';
 import { BarChart3, ListTodo, Loader2, RefreshCw, AlertTriangle, Layers, User, Users } from 'lucide-react';
 
 interface Project {
@@ -160,6 +161,16 @@ export default function Home() {
     });
   }, [issues, userScope, currentUser]);
 
+  // Project-wide (not "mine only") overdue/blocked lookup for the Issues list badges
+  const overdueIssueIds = useMemo(
+    () => new Set(filterOverdueIssues(issues, states).map(i => i.id)),
+    [issues, states]
+  );
+  const blockedIssueIds = useMemo(
+    () => new Set(filterBlockedIssues(issues, states).map(i => i.id)),
+    [issues, states]
+  );
+
   // Persisted Move Issue (PATCH to Plane API)
   const handleMoveIssue = useCallback(async (issueId: string, newStateId: string) => {
     if (!activeProjectId) return;
@@ -293,6 +304,16 @@ export default function Home() {
                         <span className="text-sm font-medium text-[#FAFAFA] truncate">{issue.name}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-3">
+                        {overdueIssueIds.has(issue.id) && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 font-medium">
+                            Overdue
+                          </span>
+                        )}
+                        {blockedIssueIds.has(issue.id) && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-medium">
+                            Blocked
+                          </span>
+                        )}
                         {assigneeName && (
                           <span className="text-[10px] px-2 py-0.5 rounded bg-[#18181B] text-blue-400 border border-blue-500/20 font-medium">
                             {assigneeName}

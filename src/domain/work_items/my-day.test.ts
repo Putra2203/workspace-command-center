@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeMyDayBuckets, type PlaneStateLike, type WorkItemLike } from './my-day';
+import { computeMyDayBuckets, filterOverdueIssues, filterBlockedIssues, type PlaneStateLike, type WorkItemLike } from './my-day';
 
 const TODAY = '2026-08-19';
 const ME = 'user-1';
@@ -114,5 +114,45 @@ describe('computeMyDayBuckets', () => {
       TODAY
     );
     expect(result.metrics.blocked).toBe(1);
+  });
+});
+
+describe('filterOverdueIssues (project-wide, no assignee scoping)', () => {
+  it('includes a past-due, not-done issue regardless of assignee', () => {
+    const result = filterOverdueIssues(
+      [issue({ id: 'i1', assignees: [OTHER], state: 'state-todo', target_date: '2026-08-01' })],
+      states,
+      TODAY
+    );
+    expect(result.map(i => i.id)).toEqual(['i1']);
+  });
+
+  it('excludes a done issue even if its due date has passed', () => {
+    const result = filterOverdueIssues(
+      [issue({ id: 'i1', state: 'state-done', target_date: '2026-08-01' })],
+      states,
+      TODAY
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('excludes an issue with no due date at all', () => {
+    const result = filterOverdueIssues([issue({ id: 'i1', state: 'state-todo' })], states, TODAY);
+    expect(result).toEqual([]);
+  });
+});
+
+describe('filterBlockedIssues (project-wide, no assignee scoping)', () => {
+  it('includes a blocked issue regardless of assignee', () => {
+    const result = filterBlockedIssues(
+      [issue({ id: 'i1', assignees: [OTHER], state: 'state-blocked' })],
+      states
+    );
+    expect(result.map(i => i.id)).toEqual(['i1']);
+  });
+
+  it('excludes an issue in a non-blocked state', () => {
+    const result = filterBlockedIssues([issue({ id: 'i1', state: 'state-todo' })], states);
+    expect(result).toEqual([]);
   });
 });

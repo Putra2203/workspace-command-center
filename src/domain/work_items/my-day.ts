@@ -61,6 +61,30 @@ export function resolveIssueState<T extends WorkItemLike>(
 }
 
 /**
+ * Project-wide overdue filter — no assignee scoping, unlike `computeMyDayBuckets`.
+ * `today` defaults to the real date but can be overridden for deterministic testing.
+ */
+export function filterOverdueIssues<T extends WorkItemLike>(
+  issues: T[],
+  states: PlaneStateLike[],
+  today: string = new Date().toISOString().slice(0, 10)
+): T[] {
+  const stateMap = buildStateMap(states);
+  return issues.filter(issue => {
+    if (!issue.target_date) return false;
+    const state = resolveIssueState(issue, stateMap);
+    if (isDoneGroup(state?.group)) return false;
+    return issue.target_date.slice(0, 10) < today;
+  });
+}
+
+/** Project-wide blocked filter — no assignee scoping, unlike `computeMyDayBuckets`. */
+export function filterBlockedIssues<T extends WorkItemLike>(issues: T[], states: PlaneStateLike[]): T[] {
+  const stateMap = buildStateMap(states);
+  return issues.filter(issue => isBlockedState(resolveIssueState(issue, stateMap)));
+}
+
+/**
  * `today` defaults to the real date but can be overridden for deterministic
  * testing — a 'YYYY-MM-DD' string, matching Plane's `target_date` format.
  */
@@ -73,21 +97,18 @@ export function computeMyDayBuckets<T extends WorkItemLike>(
   const stateMap = buildStateMap(states);
   const myIssues = currentUserId ? issues.filter(i => i.assignees?.includes(currentUserId)) : [];
 
+  const overdueIssues = filterOverdueIssues(myIssues, states, today);
+  const blockedIssues = filterBlockedIssues(myIssues, states);
   const dueTodayIssues: T[] = [];
-  const overdueIssues: T[] = [];
-  const blockedIssues: T[] = [];
   const activeIssues: T[] = [];
 
   for (const issue of myIssues) {
     const state = resolveIssueState(issue, stateMap);
     const done = isDoneGroup(state?.group);
     if (!done) activeIssues.push(issue);
-    if (isBlockedState(state)) blockedIssues.push(issue);
 
-    if (issue.target_date) {
-      const dateStr = issue.target_date.slice(0, 10);
-      if (!done && dateStr < today) overdueIssues.push(issue);
-      else if (dateStr === today) dueTodayIssues.push(issue);
+    if (issue.target_date && issue.target_date.slice(0, 10) === today) {
+      dueTodayIssues.push(issue);
     }
   }
 
