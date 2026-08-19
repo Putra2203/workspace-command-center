@@ -1,26 +1,83 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import { motion, AnimatePresence } from 'motion/react';
-import { Search, TerminalSquare, LayoutGrid, ListTodo, Plus, Search as SearchIcon } from 'lucide-react';
+import { Search, Sun, TerminalSquare, LayoutGrid, ListTodo, Plus, Search as SearchIcon } from 'lucide-react';
 
-export function CommandPalette() {
-  const { commandPaletteOpen, setCommandPaletteOpen, setActiveView } = useWorkspaceStore();
+interface SearchableIssue {
+  id: string;
+  name: string;
+  sequence_id: number;
+  project_detail?: { identifier: string };
+}
+
+interface CommandPaletteProps {
+  /** Issues from the active project, for structured client-side search — no LLM involved */
+  issues?: SearchableIssue[];
+  activeProjectKey?: string | null;
+}
+
+export function CommandPalette({ issues = [], activeProjectKey = null }: CommandPaletteProps) {
+  const { commandPaletteOpen, setCommandPaletteOpen, setActiveView, setSelectedIssue, setPendingCommand } = useWorkspaceStore();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commands = [
+    { id: 'goto-day', label: 'Go to My Day', icon: Sun, shortcut: 'G D', action: () => setActiveView('day') },
     { id: 'goto-cmd', label: 'Go to Command Center', icon: TerminalSquare, shortcut: 'G C', action: () => setActiveView('command') },
     { id: 'goto-board', label: 'Go to Board', icon: LayoutGrid, shortcut: 'G B', action: () => setActiveView('board') },
     { id: 'goto-issues', label: 'Go to Issues', icon: ListTodo, shortcut: 'G I', action: () => setActiveView('issues') },
-    { id: 'new-issue', label: 'Create new issue', icon: Plus, shortcut: 'C I', action: () => { /* open new issue modal */ } },
-    { id: 'search', label: 'Search projects and issues', icon: SearchIcon, shortcut: 'S', action: () => { /* focus search */ } },
+    {
+      id: 'new-issue',
+      label: 'Create new issue',
+      icon: Plus,
+      shortcut: 'C I',
+      action: () => {
+        setPendingCommand('Buat issue baru: ');
+        setActiveView('command');
+      },
+    },
+    {
+      id: 'search',
+      label: 'Search projects and issues',
+      icon: SearchIcon,
+      shortcut: 'S',
+      // Unlike every other command, this one keeps the palette open — it
+      // clears the query so the user can immediately start typing a search
+      // term and see live-filtered issue results below.
+      action: () => setQuery(''),
+      keepOpen: true,
+    },
   ];
 
-  const filteredCommands = query 
-    ? commands.filter(c => c.label.toLowerCase().includes(query.toLowerCase()))
+  // Structured client-side search against already-fetched issues — no LLM,
+  // no new Plane endpoint. Matches on issue title or its PROJECTKEY-N key.
+  const issueResults = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return issues
+      .filter(issue => {
+        const key = `${issue.project_detail?.identifier || activeProjectKey || ''}-${issue.sequence_id}`.toLowerCase();
+        return issue.name.toLowerCase().includes(q) || key.includes(q);
+      })
+      .slice(0, 8)
+      .map(issue => ({
+        id: `issue-${issue.id}`,
+        label: issue.name,
+        icon: ListTodo,
+        shortcut: '',
+        keepOpen: false,
+        action: () => {
+          setSelectedIssue(issue.id);
+          setActiveView('issues');
+        },
+      }));
+  }, [query, issues, activeProjectKey, setSelectedIssue, setActiveView]);
+
+  const filteredCommands = query
+    ? [...commands.filter(c => c.label.toLowerCase().includes(query.toLowerCase())), ...issueResults]
     : commands;
 
   useEffect(() => {
@@ -48,7 +105,7 @@ export function CommandPalette() {
   useEffect(() => {
     const handleNavigation = (e: KeyboardEvent) => {
       if (!commandPaletteOpen) return;
-      
+
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         setSelectedIndex((prev) => (prev + 1) % filteredCommands.length);
@@ -62,7 +119,7 @@ export function CommandPalette() {
         const cmd = filteredCommands[selectedIndex];
         if (cmd) {
           cmd.action();
-          setCommandPaletteOpen(false);
+          if (!('keepOpen' in cmd && cmd.keepOpen)) setCommandPaletteOpen(false);
         }
       }
     };
@@ -75,7 +132,7 @@ export function CommandPalette() {
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] sm:pt-[20vh] px-4">
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -119,12 +176,12 @@ export function CommandPalette() {
                       key={cmd.id}
                       onClick={() => {
                         cmd.action();
-                        setCommandPaletteOpen(false);
+                        if (!('keepOpen' in cmd && cmd.keepOpen)) setCommandPaletteOpen(false);
                       }}
                       onMouseEnter={() => setSelectedIndex(idx)}
                       className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-colors ${
-                        isSelected 
-                          ? 'bg-blue-500/10 text-blue-500' 
+                        isSelected
+                          ? 'bg-blue-500/10 text-blue-500'
                           : 'text-[#A1A1AA] hover:bg-[#18181B] hover:text-[#FAFAFA]'
                       }`}
                     >

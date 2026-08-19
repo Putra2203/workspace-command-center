@@ -54,6 +54,8 @@ interface WorkspaceState {
   userScope: UserScope;
   /** Authenticated User Profile, resolved from Plane's /users/me/ on app load. Null until resolved. */
   currentUser: UserProfile | null;
+  /** Draft text handed off to ChatInterface (e.g. from the command palette's "Create new issue"), consumed once then cleared */
+  pendingCommand: string | null;
 
   // Actions
   setActiveProject: (id: string | null, key?: string | null) => void;
@@ -67,6 +69,7 @@ interface WorkspaceState {
   setTheme: (theme: 'dark' | 'light') => void;
   setUserScope: (scope: UserScope) => void;
   setCurrentUser: (user: UserProfile | null) => void;
+  setPendingCommand: (command: string | null) => void;
 }
 
 const lastActiveProject = readLastActiveProject();
@@ -81,6 +84,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   theme: 'dark',
   userScope: 'my_tasks',
   currentUser: null,
+  pendingCommand: null,
 
   setActiveProject: (id, key = null) => {
     writeLastActiveProject(id, key);
@@ -96,4 +100,5 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setTheme: (theme) => set({ theme }),
   setUserScope: (scope) => set({ userScope: scope }),
   setCurrentUser: (user) => set({ currentUser: user }),
+  setPendingCommand: (command) => set({ pendingCommand: command }),
 }));

@@ -464,7 +464,7 @@ export default function Home() {
       <MobileNav />
 
       {/* Command Palette */}
-      <CommandPalette />
+      <CommandPalette issues={issues} activeProjectKey={activeProjectKey} />
     </div>
   );
 }

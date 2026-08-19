@@ -226,11 +226,17 @@ Goal: ship the UI/data flows that need **zero AI** so the app is useful standalo
 - **Tests**: 5 new tests in `my-day.test.ts` for the two standalone helpers (overdue regardless of assignee, done issues excluded even if past-due, no-due-date excluded, blocked regardless of assignee, non-blocked state excluded).
 - **Acceptance criteria**: My Day dashboard sections for "Overdue" and "Blocked" populate correctly — already true since P1-01 (re-verified: the refactor preserved all existing test assertions). Additionally cross-checked the new project-wide filters against live Plane data.
 
-### P1-05 — Wire Universal Command palette to real actions
+### P1-05 — Wire Universal Command palette to real actions ✅ Done
 - **Priority**: High · **Effort**: M · **Depends on**: P0-02
 - **Problem**: `src/components/layout/CommandPalette.tsx`'s `commands` array (lines 14-20) is fully stubbed — `Create new issue` and `Search` are no-ops, and it has no connection to the intent engine or `/api/ai` at all.
 - **Task**: wire "Go to ..." commands to actual navigation (if not already working), wire "Create new issue" to open the existing issue-creation flow, and wire "Search" to a real structured search against `listIssues()` (no LLM needed yet — natural-language search is Phase 2).
-- **Acceptance criteria**: every command in the palette performs a real action; none are no-ops.
+- **Findings**: confirmed via the graph that no dedicated issue-creation modal exists anywhere in the app — the *only* existing issue-creation flow is the AI chat (`ChatInterface` → `/api/ai`). "Open the existing issue-creation flow" is read accordingly, not as a new modal. Also confirmed `selectedIssueId`/`setSelectedIssue` (in the workspace store since before this session) were unused anywhere — now given a real purpose.
+- **Implementation**:
+  - Added `pendingCommand`/`setPendingCommand` to the workspace store — a one-shot draft handoff. "Create new issue" sets it to a starter draft and navigates to the Command Center view; `ChatInterface` consumes it once on mount/change (pre-filling and focusing its input), then clears it.
+  - Added a "Go to My Day" command (P1-01 added that view; it wasn't in the palette yet).
+  - "Search projects and issues" is the one command that keeps the palette open on invoke (clears the query instead) — every other command closes it — since its whole purpose is to let the user immediately start typing a live search.
+  - Structured search: `CommandPalette` now accepts `issues`/`activeProjectKey` props (passed from `page.tsx`'s already-fetched `issues`, no new fetch) and, whenever the typed query doesn't match a static command, filters issues client-side by title or `PROJECTKEY-N` key, showing up to 8 results merged into the same keyboard-navigable list. Selecting one sets `selectedIssueId` and navigates to the Issues view.
+- **Acceptance criteria**: every command in the palette performs a real action; none are no-ops — verified by inspection (every `action` now has an observable effect) and a live dev-server smoke test (clean load, no runtime errors). No automated test added — this is interactive keyboard/DOM behavior and the project has no component-testing setup (jsdom/RTL) yet; setting that up was judged out of scope for this task, consistent with the same call made in P1-01.
 
 ### P1-06 — Bulk action preview (no AI)
 - **Priority**: Medium · **Effort**: M · **Depends on**: P0-06

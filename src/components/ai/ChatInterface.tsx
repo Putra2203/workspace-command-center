@@ -18,15 +18,25 @@ interface ChatInterfaceProps {
 }
 
 export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
-  const { activeProjectId } = useWorkspaceStore();
+  const { activeProjectId, pendingCommand, setPendingCommand } = useWorkspaceStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isLoading]);
+
+  // Consume a draft handed off from elsewhere (e.g. the command palette's
+  // "Create new issue") exactly once, then clear it so it doesn't reapply.
+  useEffect(() => {
+    if (pendingCommand === null) return;
+    setInput(pendingCommand);
+    setPendingCommand(null);
+    inputRef.current?.focus();
+  }, [pendingCommand, setPendingCommand]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -161,6 +171,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
       <div className="p-4 bg-[#09090B] border-t border-white/5">
         <div className="max-w-3xl mx-auto relative flex items-end gap-2 bg-[#111113] border border-white/10 rounded-2xl p-2 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/50 transition-all shadow-sm">
           <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
