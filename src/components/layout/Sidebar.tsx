@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
 import {
   Sparkles,
   Sun,
@@ -31,12 +32,12 @@ interface SidebarProps {
 }
 
 export function Sidebar({ projects }: SidebarProps) {
-  const { 
-    sidebarOpen, 
-    setSidebarOpen, 
-    activeView, 
-    setActiveView, 
-    activeProjectId, 
+  const router = useRouter();
+  const pathname = usePathname();
+  const {
+    sidebarOpen,
+    setSidebarOpen,
+    activeProjectId,
     setActiveProject,
     userScope,
     setUserScope,
@@ -158,11 +159,11 @@ export function Sidebar({ projects }: SidebarProps) {
       <nav className="flex-1 px-3 py-4 space-y-1">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeView === item.id;
+          const isActive = pathname === `/${item.id}`;
           return (
             <button
               key={item.id}
-              onClick={() => setActiveView(item.id)}
+              onClick={() => router.push(`/${item.id}`)}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${
                 isActive 
                   ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium' 

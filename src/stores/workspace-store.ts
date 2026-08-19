@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 
-export type ViewType = 'day' | 'command' | 'board' | 'issues' | 'cycles' | 'analytics';
 export type UserScope = 'my_tasks' | 'all';
 
 export interface UserProfile {
@@ -46,8 +45,6 @@ interface WorkspaceState {
   commandPaletteOpen: boolean;
   /** Selected issue UUID for detail panel */
   selectedIssueId: string | null;
-  /** Current active view in main content area */
-  activeView: ViewType;
   /** Color theme */
   theme: 'dark' | 'light';
   /** User filtering scope - defaults to 'my_tasks' */
@@ -65,7 +62,6 @@ interface WorkspaceState {
   setCommandPaletteOpen: (open: boolean) => void;
   toggleCommandPalette: () => void;
   setSelectedIssue: (id: string | null) => void;
-  setActiveView: (view: ViewType) => void;
   setTheme: (theme: 'dark' | 'light') => void;
   setUserScope: (scope: UserScope) => void;
   setCurrentUser: (user: UserProfile | null) => void;
@@ -80,7 +76,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   sidebarOpen: true,
   commandPaletteOpen: false,
   selectedIssueId: null,
-  activeView: 'day',
   theme: 'dark',
   userScope: 'my_tasks',
   currentUser: null,
@@ -96,7 +91,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   toggleCommandPalette: () => set((state) => ({ commandPaletteOpen: !state.commandPaletteOpen })),
   setSelectedIssue: (id) => set({ selectedIssueId: id }),
-  setActiveView: (view) => set({ activeView: view }),
   setTheme: (theme) => set({ theme }),
   setUserScope: (scope) => set({ userScope: scope }),
   setCurrentUser: (user) => set({ currentUser: user }),

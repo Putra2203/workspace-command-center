@@ -1,16 +1,17 @@
 'use client';
 
-import { useWorkspaceStore } from '@/stores/workspace-store';
+import { useRouter, usePathname } from 'next/navigation';
 import { TerminalSquare, LayoutGrid, ListTodo, Home, Menu } from 'lucide-react';
 
 export function MobileNav() {
-  const { activeView, setActiveView } = useWorkspaceStore();
+  const router = useRouter();
+  const pathname = usePathname();
 
   const navItems = [
-    { id: 'day', label: 'My Day', icon: Home, action: () => setActiveView('day') },
-    { id: 'board', label: 'Board', icon: LayoutGrid, action: () => setActiveView('board') },
-    { id: 'command', label: 'AI', icon: TerminalSquare, action: () => setActiveView('command'), isPrimary: true },
-    { id: 'issues', label: 'Issues', icon: ListTodo, action: () => setActiveView('issues') },
+    { id: 'day', label: 'My Day', icon: Home, action: () => router.push('/day') },
+    { id: 'board', label: 'Board', icon: LayoutGrid, action: () => router.push('/board') },
+    { id: 'command', label: 'AI', icon: TerminalSquare, action: () => router.push('/command'), isPrimary: true },
+    { id: 'issues', label: 'Issues', icon: ListTodo, action: () => router.push('/issues') },
     { id: 'more', label: 'More', icon: Menu, action: () => {} },
   ];
 
@@ -19,8 +20,8 @@ export function MobileNav() {
       <div className="flex items-center justify-around px-2 h-16">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeView === item.id || (item.isPrimary && activeView === 'command');
-          
+          const isActive = pathname === `/${item.id}` || (item.isPrimary && pathname === '/command');
+
           if (item.isPrimary) {
             return (
               <button

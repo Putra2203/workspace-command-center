@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Sun, TerminalSquare, LayoutGrid, ListTodo, Plus, Search as SearchIcon } from 'lucide-react';
@@ -19,16 +20,17 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ issues = [], activeProjectKey = null }: CommandPaletteProps) {
-  const { commandPaletteOpen, setCommandPaletteOpen, setActiveView, setSelectedIssue, setPendingCommand } = useWorkspaceStore();
+  const router = useRouter();
+  const { commandPaletteOpen, setCommandPaletteOpen, setSelectedIssue, setPendingCommand } = useWorkspaceStore();
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const commands = [
-    { id: 'goto-day', label: 'Go to My Day', icon: Sun, shortcut: 'G D', action: () => setActiveView('day') },
-    { id: 'goto-cmd', label: 'Go to Command Center', icon: TerminalSquare, shortcut: 'G C', action: () => setActiveView('command') },
-    { id: 'goto-board', label: 'Go to Board', icon: LayoutGrid, shortcut: 'G B', action: () => setActiveView('board') },
-    { id: 'goto-issues', label: 'Go to Issues', icon: ListTodo, shortcut: 'G I', action: () => setActiveView('issues') },
+    { id: 'goto-day', label: 'Go to My Day', icon: Sun, shortcut: 'G D', action: () => router.push('/day') },
+    { id: 'goto-cmd', label: 'Go to Command Center', icon: TerminalSquare, shortcut: 'G C', action: () => router.push('/command') },
+    { id: 'goto-board', label: 'Go to Board', icon: LayoutGrid, shortcut: 'G B', action: () => router.push('/board') },
+    { id: 'goto-issues', label: 'Go to Issues', icon: ListTodo, shortcut: 'G I', action: () => router.push('/issues') },
     {
       id: 'new-issue',
       label: 'Create new issue',
@@ -36,7 +38,7 @@ export function CommandPalette({ issues = [], activeProjectKey = null }: Command
       shortcut: 'C I',
       action: () => {
         setPendingCommand('Buat issue baru: ');
-        setActiveView('command');
+        router.push('/command');
       },
     },
     {
@@ -71,10 +73,10 @@ export function CommandPalette({ issues = [], activeProjectKey = null }: Command
         keepOpen: false,
         action: () => {
           setSelectedIssue(issue.id);
-          setActiveView('issues');
+          router.push('/issues');
         },
       }));
-  }, [query, issues, activeProjectKey, setSelectedIssue, setActiveView]);
+  }, [query, issues, activeProjectKey, setSelectedIssue, router]);
 
   const filteredCommands = query
     ? [...commands.filter(c => c.label.toLowerCase().includes(query.toLowerCase())), ...issueResults]
