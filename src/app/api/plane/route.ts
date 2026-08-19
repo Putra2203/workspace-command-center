@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
-import { PlaneService } from '@/infrastructure/plane/PlaneClient';
+import { planeService } from '@/infrastructure/plane/PlaneClient';
 import { ProjectService } from '@/application/services/ProjectService';
+import { AppError } from '@/lib/errors';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -8,7 +9,6 @@ export async function GET(request: NextRequest) {
   const projectId = searchParams.get('projectId');
   const issueId = searchParams.get('issueId');
 
-  const planeService = new PlaneService();
   const projectService = new ProjectService(planeService);
 
   try {
@@ -69,16 +69,19 @@ export async function GET(request: NextRequest) {
       default:
         return Response.json({ error: 'Invalid action' }, { status: 400 });
     }
-  } catch (error: any) {
-    console.error('Plane API GET Error:', error.message);
-    return Response.json({ error: error.message || 'Internal Server Error' }, { status: error.response?.status || 500 });
+  } catch (error: unknown) {
+    const appError = AppError.fromUnknown(error);
+    console.error('Plane API GET Error:', appError.code, appError.message);
+    return Response.json(
+      { error: appError.userMessage, code: appError.code, retryable: appError.retryable },
+      { status: appError.httpStatus }
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const action = searchParams.get('action');
-  const planeService = new PlaneService();
 
   try {
     const body = await request.json();
@@ -101,16 +104,19 @@ export async function POST(request: NextRequest) {
       default:
         return Response.json({ error: 'Invalid action' }, { status: 400 });
     }
-  } catch (error: any) {
-    console.error('Plane API POST Error:', error.message);
-    return Response.json({ error: error.message || 'Internal Server Error' }, { status: error.response?.status || 500 });
+  } catch (error: unknown) {
+    const appError = AppError.fromUnknown(error);
+    console.error('Plane API POST Error:', appError.code, appError.message);
+    return Response.json(
+      { error: appError.userMessage, code: appError.code, retryable: appError.retryable },
+      { status: appError.httpStatus }
+    );
   }
 }
 
 export async function PATCH(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const action = searchParams.get('action');
-  const planeService = new PlaneService();
 
   try {
     const body = await request.json();
@@ -127,9 +133,13 @@ export async function PATCH(request: NextRequest) {
       default:
         return Response.json({ error: 'Invalid action' }, { status: 400 });
     }
-  } catch (error: any) {
-    console.error('Plane API PATCH Error:', error.message);
-    return Response.json({ error: error.message || 'Internal Server Error' }, { status: error.response?.status || 500 });
+  } catch (error: unknown) {
+    const appError = AppError.fromUnknown(error);
+    console.error('Plane API PATCH Error:', appError.code, appError.message);
+    return Response.json(
+      { error: appError.userMessage, code: appError.code, retryable: appError.retryable },
+      { status: appError.httpStatus }
+    );
   }
 }
 
@@ -138,8 +148,6 @@ export async function DELETE(request: NextRequest) {
   const action = searchParams.get('action');
   const projectId = searchParams.get('projectId');
   const issueId = searchParams.get('issueId');
-
-  const planeService = new PlaneService();
 
   try {
     switch (action) {
@@ -153,8 +161,12 @@ export async function DELETE(request: NextRequest) {
       default:
         return Response.json({ error: 'Invalid action' }, { status: 400 });
     }
-  } catch (error: any) {
-    console.error('Plane API DELETE Error:', error.message);
-    return Response.json({ error: error.message || 'Internal Server Error' }, { status: error.response?.status || 500 });
+  } catch (error: unknown) {
+    const appError = AppError.fromUnknown(error);
+    console.error('Plane API DELETE Error:', appError.code, appError.message);
+    return Response.json(
+      { error: appError.userMessage, code: appError.code, retryable: appError.retryable },
+      { status: appError.httpStatus }
+    );
   }
 }

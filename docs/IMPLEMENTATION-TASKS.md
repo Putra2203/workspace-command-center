@@ -159,21 +159,22 @@ Goal: remove hardcoded values, stand up the domain-service layer skeleton and `A
   Add matching zod schemas in a new `src/types/schemas.ts` (`ActionStepSchema`, `ActionPlanSchema`) so any AI-generated JSON can be validated with `ActionPlanSchema.safeParse(...)` before being trusted. This task only adds the types/schemas — wiring them into the actual AI flow happens in P2-02/P2-06.
 - **Acceptance criteria**: types compile; a unit test feeds a valid and an invalid `ActionPlan` JSON through `ActionPlanSchema.safeParse` and asserts success/failure correctly.
 
-### P0-07 — Structured `AppError` type
+### P0-07 — Structured `AppError` type ✅ Done
 - **Priority**: Low · **Effort**: S · **Depends on**: —
 - **Task**: add `src/lib/errors.ts` exporting `AppError { code: string; message: string; userMessage: string; retryable: boolean }`. Use it in `src/app/api/plane/route.ts`'s error handling (currently just `error.response?.status || 500`) as the first adopting call site.
 - **Acceptance criteria**: `AppError` type exists and is thrown/caught in at least one route with a test covering the retryable vs non-retryable distinction.
 
-### P0-08 — Fix per-request `PlaneService` instantiation (make cache actually work)
+### P0-08 — Fix per-request `PlaneService` instantiation (make cache actually work) ✅ Done
 - **Priority**: High · **Effort**: S · **Depends on**: —
 - **Problem**: every branch in `src/app/api/plane/route.ts` (lines ~10, 79, 111, 140) and `src/app/api/ai/route.ts:28` does `new PlaneService()`, so the in-memory `TTLCache` inside it (`src/lib/plane/client.ts:19-61`, 60s TTL) is recreated — and thus useless — on every single request.
 - **Task**: export a module-level singleton `PlaneService` instance (or a cached factory keyed by workspace slug, since `PLANE_WORKSPACE_SLUG` is currently a single global env var) from `src/lib/plane/client.ts` and use it in both route files instead of `new PlaneService()` per call.
 - **Acceptance criteria**: two sequential `GET /api/plane?action=listProjects` calls within 60s result in only one upstream Plane API call (verify via a log line or test spy).
 
-### P0-09 — Adopt TanStack Query in one view
+### P0-09 — Adopt TanStack Query in one view ✅ Done
 - **Priority**: Medium · **Effort**: M · **Depends on**: P0-05
 - **Problem**: `@tanstack/react-query` is installed and `QueryProvider` is wired in `src/lib/providers/query-provider.tsx` / `layout.tsx:28`, but zero components use `useQuery`/`useMutation` — all fetching in `page.tsx` is raw `fetch` + `useState`/`useEffect`.
-- **Task**: convert the project-list fetch in `src/app/page.tsx` to `useQuery(['projects'], ...)` calling `/api/plane?action=listProjects`, with standard loading/error states. This becomes the template other views follow in Phase 1.
+- **Task**: convert the project-list fetch in `src/app/page.tsx` to `useQuery({ queryKey: ['projects'], queryFn: ... })` calling `/api/plane?action=listProjects`, with standard loading/error states. This becomes the template other views follow in Phase 1. **Correction**: the installed version is `@tanstack/react-query@5.101.4` (v5), which requires the object-args form — the `useQuery(['projects'], fn)` tuple syntax in the original task description is v4-only and would fail to typecheck against what's actually installed.
+- **Implementation notes**: the old `fetchProjects`/`loading` state and its mount-time `useEffect` were replaced by the query; a separate small effect still handles "keep the last-used project if still valid, else fall back to `projects[0]`" (a side effect reacting to fetched data, not the fetch itself, so it stays outside `queryFn`). Installed `@tanstack/react-query-devtools@5.101.4` and wired it into `QueryProvider` (dev-only, matching the acceptance criteria's literal mention of devtools) — not previously installed. The header's manual refresh button now calls both `refetchProjects()` and the existing `fetchProjectData()`.
 - **Acceptance criteria**: project list loads via TanStack Query devtools showing a cached query; manual refresh (React Query `refetch`) works without a full page reload.
 
 ### P0-10 — Persistent query-cache table in Supabase

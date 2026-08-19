@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { ChatInterface } from '@/components/ai/ChatInterface';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
@@ -45,11 +46,9 @@ export default function Home() {
     setCurrentUser
   } = useWorkspaceStore();
 
-  const [projects, setProjects] = useState<Project[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [states, setStates] = useState<State[]>([]);
   const [members, setMembers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [fetchingIssues, setFetchingIssues] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
 
@@ -68,34 +67,31 @@ export default function Home() {
     })();
   }, [setCurrentUser]);
 
-  // Fetch all projects on mount
-  const fetchProjects = useCallback(async () => {
-    try {
-      setLoading(true);
+  // Project list, via TanStack Query — the template other Phase 1 views follow.
+  const {
+    data: projects = [],
+    isLoading: projectsLoading,
+    refetch: refetchProjects,
+  } = useQuery({
+    queryKey: ['projects'],
+    queryFn: async (): Promise<Project[]> => {
       const res = await fetch('/api/plane?action=listProjects');
+      if (!res.ok) throw new Error(`Failed to fetch projects: ${res.status}`);
       const data = await res.json();
-      const results: Project[] = Array.isArray(data) ? data : data.results || [];
-      setProjects(results);
+      return Array.isArray(data) ? data : data.results || [];
+    },
+  });
 
-      if (results.length > 0) {
-        // Keep the last-used project (restored from the workspace store on init)
-        // if it's still in this workspace's project list; otherwise fall back to
-        // the first project returned by the API — no specific identifier assumed.
-        const stillValid = activeProjectId && results.some(p => p.id === activeProjectId);
-        if (!stillValid) {
-          setActiveProject(results[0].id, results[0].identifier);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch projects:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [activeProjectId, setActiveProject]);
-
+  // Keep the last-used project (restored from the workspace store on init) if
+  // it's still in this workspace's project list; otherwise fall back to the
+  // first project returned by the API — no specific identifier assumed.
   useEffect(() => {
-    fetchProjects();
-  }, []);
+    if (projects.length === 0) return;
+    const stillValid = activeProjectId && projects.some(p => p.id === activeProjectId);
+    if (!stillValid) {
+      setActiveProject(projects[0].id, projects[0].identifier);
+    }
+  }, [projects, activeProjectId, setActiveProject]);
 
   // Fetch issues, states, and members when active project changes
   const fetchProjectData = useCallback(async () => {
@@ -344,7 +340,7 @@ export default function Home() {
     }
   };
 
-  if (loading) {
+  if (projectsLoading) {
     return (
       <div className="h-screen flex items-center justify-center bg-[#09090B]">
         <div className="flex flex-col items-center gap-4">
@@ -406,7 +402,10 @@ export default function Home() {
             </div>
 
             <button
-              onClick={fetchProjectData}
+              onClick={() => {
+                refetchProjects();
+                fetchProjectData();
+              }}
               disabled={fetchingIssues}
               title="Refresh live project data"
               className="p-2 rounded-lg bg-[#111113] border border-white/10 hover:bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"

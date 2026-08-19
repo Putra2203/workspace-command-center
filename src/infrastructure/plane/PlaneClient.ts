@@ -450,3 +450,16 @@ export class PlaneService {
     return modules;
   }
 }
+
+// Module-level singleton: PLANE_WORKSPACE_SLUG is a single global env var
+// today (no multi-workspace support), so one shared instance is enough.
+// Constructing a new PlaneService() per request (the previous pattern in
+// both API route files) recreated its TTLCache on every call, making it a
+// no-op — this instance persists across requests within the same process.
+const globalForPlaneService = globalThis as unknown as { planeService?: PlaneService };
+
+export const planeService = globalForPlaneService.planeService ?? new PlaneService();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPlaneService.planeService = planeService;
+}
