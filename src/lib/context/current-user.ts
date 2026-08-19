@@ -1,4 +1,4 @@
-import { PlaneService } from '@/lib/plane/client';
+import { PlaneService } from '@/infrastructure/plane/PlaneClient';
 
 export interface CurrentUserContext {
   userId: string;

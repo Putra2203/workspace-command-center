@@ -27,3 +27,20 @@ export interface ConversationContext {
   activeProjectId?: string;
   activeProjectKey?: string;
 }
+
+export type ActionStep = {
+  operation: string;
+  target: string;
+  changes: Record<string, unknown>;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+};
+
+export type ActionPlan = {
+  id: string;
+  intent: string;
+  summary: string;
+  risk: 'low' | 'medium' | 'high';
+  requiresApproval: boolean;
+  steps: ActionStep[];
+};

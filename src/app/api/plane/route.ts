@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { PlaneService } from '@/lib/plane/client';
+import { PlaneService } from '@/infrastructure/plane/PlaneClient';
+import { ProjectService } from '@/application/services/ProjectService';
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -8,6 +9,7 @@ export async function GET(request: NextRequest) {
   const issueId = searchParams.get('issueId');
 
   const planeService = new PlaneService();
+  const projectService = new ProjectService(planeService);
 
   try {
     switch (action) {
@@ -16,7 +18,7 @@ export async function GET(request: NextRequest) {
         return Response.json(data);
       }
       case 'listProjects': {
-        const data = await planeService.listProjects();
+        const data = await projectService.listProjects();
         return Response.json(data);
       }
       case 'getProject': {

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { parseIntentAsync } from '@/lib/ai/intent-engine';
 import { executeIntent } from '@/lib/ai/executor';
-import { PlaneService } from '@/lib/plane/client';
+import { PlaneService } from '@/infrastructure/plane/PlaneClient';
 import { getCurrentUserContext } from '@/lib/context/current-user';
 
 export async function POST(request: NextRequest) {

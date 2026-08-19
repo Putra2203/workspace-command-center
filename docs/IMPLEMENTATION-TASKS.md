@@ -46,7 +46,7 @@ Goal: remove hardcoded values, stand up the domain-service layer skeleton and `A
 - **Task**: point all imports at `@/stores/workspace-store` and delete `src/lib/store/workspace.ts`.
 - **Acceptance criteria**: `src/lib/store/workspace.ts` no longer exists; `grep -rn "lib/store/workspace" src/` returns zero matches; app builds and runs unchanged.
 
-### P0-04 — Provision Supabase + Prisma ORM setup ✅ Mostly done (blocked on real Supabase credentials)
+### P0-04 — Provision Supabase + Prisma ORM setup ✅ Done
 - **Priority**: Critical · **Effort**: M · **Depends on**: —
 - **ORM decision**: **Prisma** (see Storage & ORM decision above). Pinned to the current stable release — **Prisma ORM 7.9.1** (`prisma`/`@prisma/client`, confirmed via `npm view prisma version` at implementation time — re-check before bumping, this moves fast). Not the `8.0.0-rc.x` line — that's a release candidate, not the `latest` dist-tag. Not Prisma Accelerate — Supabase's own pooler (Supavisor) covers serverless connection pooling for this single-user app at no extra cost or dependency.
 - **Correction from the original write-up of this task**: the plan below originally assumed the older `prisma-client-js` generator with `url`/`directUrl` inline in `schema.prisma`'s `datasource` block. Running `npx prisma init` against the real installed 7.9.1 package showed this is stale — **Prisma 7's default generator is `prisma-client`**, which (a) requires an explicit `output` path and generates outside `node_modules`, (b) requires a **driver adapter** (`@prisma/adapter-pg` + `pg`) instead of Prisma's old built-in Rust query engine, and (c) moves the datasource connection out of `schema.prisma` entirely and into `prisma.config.ts` — and even there, verified directly against `node_modules/@prisma/config/dist/index.d.ts`'s `Datasource` type, only `url` and `shadowDatabaseUrl` exist; **there is no `directUrl` field in Prisma 7's config** (unlike the old schema.prisma pattern). The steps below are what was actually implemented and verified against the installed package, not assumed from general Prisma knowledge.
@@ -114,17 +114,16 @@ Goal: remove hardcoded values, stand up the domain-service layer skeleton and `A
   ```
   This is the standard Next.js dev-mode hot-reload guard (prevents exhausting the pooler's connection limit from repeated module reloads) and gives every server-side call site one shared instance — mirroring the fix for the `new PlaneService()`-per-request bug in P0-08, applied to the DB layer from day one. Note it reads `DATABASE_URL` (pooled) directly — independent of `prisma.config.ts`'s `DIRECT_URL`, which only the CLI sees.
 
-- **Step 5 — First migration** (⏸ blocked): with the schema still empty (no models yet — that's fine, later tasks add `query_cache`/`ai_usage`/`action_plan_audit_log`/`inbox_items` each in their own task), run:
+- **Step 5 — First migration** (done): with the schema still empty (no models yet — that's fine, later tasks add `query_cache`/`ai_usage`/`action_plan_audit_log`/`inbox_items` each in their own task):
   ```bash
   npx prisma migrate dev --name init
-  npx prisma generate
   ```
-  `npx prisma generate` (codegen only, no DB needed) was run successfully and confirmed to typecheck and build cleanly. `npx prisma migrate dev` correctly fails right now with `P1013: invalid domain character in database URL` — expected, since `.env.local` still has the bracketed placeholders from Step 1. **Fill in real Supabase credentials to unblock this step.** `migrate dev` is for local iteration; `migrate deploy` is the non-interactive command for CI/production, added to a deploy pipeline once one exists — not wired up yet.
-  - If `migrate dev`'s shadow-database creation fails on Supabase (some managed Postgres setups restrict `CREATE DATABASE`), the fallback is a `shadowDatabaseUrl` entry alongside `url` in `prisma.config.ts`'s `datasource` block, pointing at a second small database dedicated to shadow use — not needed unless the plain setup above actually hits that error.
+  Ran successfully against real Supabase credentials (via the session pooler on port 5432, since this Supabase project is IPv4-only) — reported "Already in sync, no schema change or pending migration was found" since there are zero models yet, so no `prisma/migrations/` folder was created (expected — the first real migration lands whenever P0-10/X-01/P2-04/P3-03 add their first models). Connectivity was independently confirmed via `npx prisma db execute` running a live `SELECT 1`, via a standalone script importing the singleton client directly, and — matching the acceptance criteria's literal wording — via a real temporary Next.js API route hit through `npm run dev`, which returned `{"result":[{"ok":1}]}` before being deleted. `migrate dev` is for local iteration; `migrate deploy` is the non-interactive command for CI/production, added to a deploy pipeline once one exists — not wired up yet.
+  - If `migrate dev`'s shadow-database creation fails on Supabase (some managed Postgres setups restrict `CREATE DATABASE`), the fallback is a `shadowDatabaseUrl` entry alongside `url` in `prisma.config.ts`'s `datasource` block, pointing at a second small database dedicated to shadow use — not needed yet since this project hasn't added its first model.
 
 - **Acceptance criteria**: `npx prisma migrate dev --name init` runs cleanly against Supabase using `DIRECT_URL`; a Next.js API route importing `prisma` from `src/infrastructure/db/client.ts` and running a trivial query (e.g. `prisma.$queryRaw\`SELECT 1\``) succeeds in dev; confirm the app still works after several hot-reloads without exhausting Supabase's pooled-connection limit (watch the Supabase dashboard's connection count).
 
-### P0-05 — Domain-service layer skeleton
+### P0-05 — Domain-service layer skeleton ✅ Done
 - **Priority**: High · **Effort**: L · **Depends on**: P0-04
 - **Task**: introduce the PRD's proposed structure without a big-bang rewrite — create the directories and migrate **one** vertical slice end-to-end as the reference pattern:
   ```
@@ -136,7 +135,7 @@ Goal: remove hardcoded values, stand up the domain-service layer skeleton and `A
   Move the project-listing logic currently inline in `src/app/page.tsx` / `src/app/api/plane/route.ts`'s `listProjects` branch into `ProjectService.listProjects()`, which internally calls the (now-singleton, see P0-08) `PlaneService`. Update `/api/plane?action=listProjects` to call `ProjectService` instead of instantiating `PlaneService` directly. Leave every other `action=` branch in `src/app/api/plane/route.ts` untouched for now — they migrate incrementally in later phases as each area is touched (don't block this task on migrating everything).
 - **Acceptance criteria**: `ProjectService.listProjects()` exists and is unit-testable in isolation (see P0-10); `GET /api/plane?action=listProjects` behavior is unchanged from a client's perspective.
 
-### P0-06 — `ActionPlan`/`ActionStep` types + zod validation
+### P0-06 — `ActionPlan`/`ActionStep` types + zod validation ✅ Done
 - **Priority**: Critical · **Effort**: M · **Depends on**: —
 - **Problem**: `src/types/ai.ts` has no `ActionPlan`/`ActionStep` — today `executor.ts` builds ad-hoc `ActionCard` objects per switch-case with `data: any`. `zod` (`^4.4.3`) is installed but imported nowhere in `src/`.
 - **Task**: add to `src/types/ai.ts`:
@@ -182,11 +181,12 @@ Goal: remove hardcoded values, stand up the domain-service layer skeleton and `A
 - **Task**: create a `query_cache` table (key, value JSON, expires_at) via the ORM from P0-04. Replace (or front) the in-memory `TTLCache` in `PlaneService` with a lookup against this table for the cacheable keys already identified in `client.ts` (`users_me`, `projects_{slug}`, `states_*`, `members_*`, `labels_*`, `cycles_*`, `modules_*`), so caching survives across serverless invocations, not just within one warm instance.
 - **Acceptance criteria**: restarting the dev server (simulating a cold serverless instance) still serves a cached `listProjects()` response within the TTL window, sourced from Supabase not memory.
 
-### P0-11 — Baseline test setup
+### P0-11 — Baseline test setup ⏳ Partially done
 - **Priority**: Low · **Effort**: S · **Depends on**: —
 - **Problem**: no test framework exists at all (no jest/vitest config, no `*.test.ts`, no test npm script).
-- **Task**: add Vitest, a `test` script in `package.json`, and first unit tests for `src/lib/ai/intent-engine.ts`'s regex fallback `parseIntent()` (deterministic, easy to test) and (once it lands) `ActionPlanSchema` from P0-06.
-- **Acceptance criteria**: `npm test` runs and passes with ≥2 real test cases.
+- **Already done (pulled forward by P0-06)**: P0-06's acceptance criteria required a real unit test for `ActionPlanSchema`, which isn't possible without a test runner — so Vitest (`^4.1.11`), `vitest.config.mts` (with the `@/*` alias resolved for tests), and the `npm test` script (`vitest run`) were added then, along with `src/types/schemas.test.ts` (2 passing tests: valid/invalid `ActionPlan`).
+- **Remaining for this task**: first unit tests for `src/lib/ai/intent-engine.ts`'s regex fallback `parseIntent()` (deterministic, easy to test).
+- **Acceptance criteria**: `npm test` runs and passes with ≥2 real test cases. *(Already satisfied by the schema tests alone — this task is really just "also test `parseIntent()`" now.)*
 
 ---
 

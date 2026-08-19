@@ -1,5 +1,5 @@
 import { IntentResult, ActionCard } from '@/types/ai';
-import { PlaneService } from '../plane/client';
+import { PlaneService } from '@/infrastructure/plane/PlaneClient';
 
 /**
  * Executes a parsed intent using the PlaneService.
