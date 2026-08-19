@@ -46,70 +46,81 @@ Goal: remove hardcoded values, stand up the domain-service layer skeleton and `A
 - **Task**: point all imports at `@/stores/workspace-store` and delete `src/lib/store/workspace.ts`.
 - **Acceptance criteria**: `src/lib/store/workspace.ts` no longer exists; `grep -rn "lib/store/workspace" src/` returns zero matches; app builds and runs unchanged.
 
-### P0-04 — Provision Supabase + Prisma ORM setup
+### P0-04 — Provision Supabase + Prisma ORM setup ✅ Mostly done (blocked on real Supabase credentials)
 - **Priority**: Critical · **Effort**: M · **Depends on**: —
-- **ORM decision**: **Prisma** (see Storage & ORM decision above). Pin to the current stable release — **Prisma ORM 7** (`prisma`/`@prisma/client` `^7.9.1` at time of writing; verify `npm view prisma version` before installing since this moves fast). Do **not** install the `8.0.0-rc.x` line — it's a release candidate, not the `latest` dist-tag, and its Supabase RLS-authoring extension is unnecessary here. Do **not** use Prisma Accelerate (`@prisma/extension-accelerate`) — that's a separate paid managed-pooling product; this app gets pooling directly from Supabase's own pooler (Supavisor) at no extra cost or dependency, which is enough for a single-user app.
+- **ORM decision**: **Prisma** (see Storage & ORM decision above). Pinned to the current stable release — **Prisma ORM 7.9.1** (`prisma`/`@prisma/client`, confirmed via `npm view prisma version` at implementation time — re-check before bumping, this moves fast). Not the `8.0.0-rc.x` line — that's a release candidate, not the `latest` dist-tag. Not Prisma Accelerate — Supabase's own pooler (Supavisor) covers serverless connection pooling for this single-user app at no extra cost or dependency.
+- **Correction from the original write-up of this task**: the plan below originally assumed the older `prisma-client-js` generator with `url`/`directUrl` inline in `schema.prisma`'s `datasource` block. Running `npx prisma init` against the real installed 7.9.1 package showed this is stale — **Prisma 7's default generator is `prisma-client`**, which (a) requires an explicit `output` path and generates outside `node_modules`, (b) requires a **driver adapter** (`@prisma/adapter-pg` + `pg`) instead of Prisma's old built-in Rust query engine, and (c) moves the datasource connection out of `schema.prisma` entirely and into `prisma.config.ts` — and even there, verified directly against `node_modules/@prisma/config/dist/index.d.ts`'s `Datasource` type, only `url` and `shadowDatabaseUrl` exist; **there is no `directUrl` field in Prisma 7's config** (unlike the old schema.prisma pattern). The steps below are what was actually implemented and verified against the installed package, not assumed from general Prisma knowledge.
 
 - **Step 1 — Supabase project & connection strings**: create the Supabase project (or confirm one already exists) and grab **two** connection strings from Project Settings → Database:
-  - **Transaction pooler** (Supavisor), port `6543`, with `?pgbouncer=true` appended — used by the running app (`DATABASE_URL`). Pooled/serverless-safe, but does not support long-lived prepared statements, which is why migrations use the other URL.
-  - **Direct connection**, port `5432` — used only by the Prisma CLI for migrations (`DIRECT_URL`).
-  Add both to `.env.local` (never commit this file):
+  - **Transaction pooler** (Supavisor), port `6543`, with `?pgbouncer=true` appended — `DATABASE_URL`, used by the running app's own driver-adapter connection (Step 4). Pooled/serverless-safe, but doesn't support the prepared statements/advisory locks migrations need.
+  - **Direct connection**, port `5432` — `DIRECT_URL`, used only by the Prisma CLI (`prisma.config.ts`, Step 3) for migrate/introspect.
+  Both already have placeholder entries in `.env.local` (never commit this file) — replace the `[project-ref]`/`[password]`/`[region]` placeholders with the real values from the Supabase dashboard:
   ```bash
   DATABASE_URL="postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?pgbouncer=true"
   DIRECT_URL="postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:5432/postgres"
   ```
-  (Exact host differs by Supabase provisioning generation — copy verbatim from the dashboard rather than hand-editing the pooled URL's port.)
 
-- **Step 2 — Install & init**:
+- **Step 2 — Install** (done):
   ```bash
   npm install prisma@^7.9.1 @prisma/client@^7.9.1
+  npm install @prisma/adapter-pg pg
+  npm install --save-dev @types/pg dotenv
   npx prisma init --datasource-provider postgresql
   ```
-  This scaffolds `prisma/schema.prisma` and, in Prisma 7, also scaffolds `prisma.config.ts` at the repo root (the file that now owns schema path / migrations path / seed config — it replaced the old `package.json#prisma` block from Prisma ≤5). Keep `prisma.config.ts` minimal; the datasource connection itself still lives in `schema.prisma`, not in `prisma.config.ts`:
-  ```ts
-  // prisma.config.ts
-  import 'dotenv/config';
-  import { defineConfig } from 'prisma/config';
+  `prisma init` on this version also auto-installs official Prisma reference docs as agent skills (`.claude/skills/`, `.windsurf/skills/`, `.agents/skills/`, tracked in `skills-lock.json`) — static MIT-licensed markdown, harmless, left in place; it also generates a placeholder `.env` with a fake `localhost` URL, which was deleted since this project standardizes on `.env.local` (Next.js convention).
 
-  export default defineConfig({
-    schema: 'prisma/schema.prisma',
-    migrations: { path: 'prisma/migrations' },
-  });
-  ```
+- **Step 3 — Config files** (done): `prisma/schema.prisma` (generator only needs `output`; no datasource URLs here anymore):
   ```prisma
-  // prisma/schema.prisma
   generator client {
-    provider = "prisma-client-js"
+    provider = "prisma-client"
+    output   = "../src/generated/prisma"
   }
 
   datasource db {
-    provider  = "postgresql"
-    url       = env("DATABASE_URL")   // pooled — used at runtime by PrismaClient
-    directUrl = env("DIRECT_URL")     // direct — used only by the CLI for migrate/introspect
+    provider = "postgresql"
   }
   ```
-  Also set `schema = "app"` convention via each model's `@@schema` **only if** multi-schema mode is enabled — for this project, keep models in the default `public` schema but be aware Supabase reserves some `public` tables/functions for its own Auth/Storage features if those get adopted later (Phase 4 auth); revisit then, not now.
-
-- **Step 3 — Singleton client**: add `src/infrastructure/db/client.ts`:
+  `prisma.config.ts` (loads `.env.local` explicitly since bare `dotenv/config` only reads `.env`; `url` here is **CLI-only** and must be the *direct* URL, not the pooled one — there's no `directUrl` field to split them anymore):
   ```ts
-  import { PrismaClient } from '@prisma/client';
+  import { config } from "dotenv";
+  import { defineConfig } from "prisma/config";
+
+  config({ path: ".env.local" });
+
+  export default defineConfig({
+    schema: "prisma/schema.prisma",
+    migrations: { path: "prisma/migrations" },
+    datasource: {
+      url: process.env["DIRECT_URL"],
+    },
+  });
+  ```
+  `src/generated/prisma` (the generated client output) is already covered by `.gitignore` (`prisma init` added it automatically).
+
+- **Step 4 — Singleton client** (done): `src/infrastructure/db/client.ts` — note the driver adapter and the import path matching the schema's `output`:
+  ```ts
+  import { PrismaClient } from '@/generated/prisma/client';
+  import { PrismaPg } from '@prisma/adapter-pg';
 
   const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-  export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+
+  export const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 
   if (process.env.NODE_ENV !== 'production') {
     globalForPrisma.prisma = prisma;
   }
   ```
-  This is the standard Next.js dev-mode hot-reload guard (prevents exhausting the pooler's connection limit from repeated module reloads) and gives every server-side call site one shared instance — mirroring the fix for the `new PlaneService()`-per-request bug in P0-08, applied to the DB layer from day one instead of repeating the same mistake.
+  This is the standard Next.js dev-mode hot-reload guard (prevents exhausting the pooler's connection limit from repeated module reloads) and gives every server-side call site one shared instance — mirroring the fix for the `new PlaneService()`-per-request bug in P0-08, applied to the DB layer from day one. Note it reads `DATABASE_URL` (pooled) directly — independent of `prisma.config.ts`'s `DIRECT_URL`, which only the CLI sees.
 
-- **Step 4 — First migration**: with the schema still empty (or with just a placeholder model), run:
+- **Step 5 — First migration** (⏸ blocked): with the schema still empty (no models yet — that's fine, later tasks add `query_cache`/`ai_usage`/`action_plan_audit_log`/`inbox_items` each in their own task), run:
   ```bash
   npx prisma migrate dev --name init
   npx prisma generate
   ```
-  `migrate dev` is for local iteration (creates + applies migration, regenerates client); `migrate deploy` is the non-interactive command for CI/production and should be added to the deploy pipeline once one exists — don't wire that up yet, just know the split exists so `migrate dev` isn't accidentally used in production later.
+  `npx prisma generate` (codegen only, no DB needed) was run successfully and confirmed to typecheck and build cleanly. `npx prisma migrate dev` correctly fails right now with `P1013: invalid domain character in database URL` — expected, since `.env.local` still has the bracketed placeholders from Step 1. **Fill in real Supabase credentials to unblock this step.** `migrate dev` is for local iteration; `migrate deploy` is the non-interactive command for CI/production, added to a deploy pipeline once one exists — not wired up yet.
+  - If `migrate dev`'s shadow-database creation fails on Supabase (some managed Postgres setups restrict `CREATE DATABASE`), the fallback is a `shadowDatabaseUrl` entry alongside `url` in `prisma.config.ts`'s `datasource` block, pointing at a second small database dedicated to shadow use — not needed unless the plain setup above actually hits that error.
 
 - **Acceptance criteria**: `npx prisma migrate dev --name init` runs cleanly against Supabase using `DIRECT_URL`; a Next.js API route importing `prisma` from `src/infrastructure/db/client.ts` and running a trivial query (e.g. `prisma.$queryRaw\`SELECT 1\``) succeeds in dev; confirm the app still works after several hot-reloads without exhausting Supabase's pooled-connection limit (watch the Supabase dashboard's connection count).
 

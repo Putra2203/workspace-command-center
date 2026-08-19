@@ -48,11 +48,16 @@ next-env.d.ts
 
 # AI tools
 .claude/
+.agents/
+.windsurf/
 graphify-out/
+CLAUDE.md
+skills-lock.json
 
 # OS
-.DS_Store
 Thumbs.db
 
 # logs
 *.log
+
+/src/generated/prisma
