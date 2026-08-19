@@ -29,3 +29,13 @@ model ActionPlanAuditLog {
 
   @@map("action_plan_audit_log")
 }
+
+model InboxItem {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  rawText   String   @map("raw_text")
+  status    String   @default("pending")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("inbox_items")
+}

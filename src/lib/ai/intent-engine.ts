@@ -1,10 +1,13 @@
 import { IntentResult, ConversationContext, ActionPlan, ActionStep } from '@/types/ai';
 import { ActionPlanSchema } from '@/types/schemas';
 import { classifyIntentTier, selectModelForTier } from './router';
+import { decomposeFeatureToSubtasks } from './decomposition';
+import { planeService } from '@/infrastructure/plane/PlaneClient';
+import { findSimilarIssues } from '@/domain/work_items/duplicate-detection';
 
 /**
  * Parses user input to determine the intent and extract relevant entities.
- * Supports Plane commands, bulk task creation, and Gemini LLM conversational chat.
+ * Supports Plane commands, bulk task creation, decomposition, and Gemini LLM conversational chat.
  */
 export async function parseIntentAsync(message: string, context?: ConversationContext): IntentResultAsync {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
@@ -26,7 +29,7 @@ export async function parseIntentAsync(message: string, context?: ConversationCo
           model,
           contents: `You are Plane AI Command Center, an intelligent assistant for project management.
 Respond to the user naturally, warmly, and helpfully in Indonesian (or the language of their prompt).
-If they say hello or ask a question, greet them and briefly explain that you can manage Plane tasks (list tasks, create tasks, update issue status, bulk tasks).
+If they say hello or ask a question, greet them and briefly explain that you can manage Plane tasks (list tasks, create tasks, update issue status, bulk tasks, decompose features).
 
 User message: "${message}"`,
         });
@@ -42,7 +45,7 @@ User message: "${message}"`,
       const response = await ai.models.generateContent({
         model,
         contents: `You are an AI intent parser for Plane Project Management. Analyze the user prompt and return JSON with intent and entities.
-Valid intents: "list_projects", "list_issues", "create_issue", "batch_create_issues", "get_issue", "update_issue", "help", "chat", "unknown".
+Valid intents: "list_projects", "list_issues", "create_issue", "batch_create_issues", "decompose", "plan", "get_issue", "update_issue", "help", "chat", "unknown".
 
 User Prompt: "${message}"
 Active Project Context: "${context?.activeProjectKey || ''}"`,
@@ -72,7 +75,7 @@ Active Project Context: "${context?.activeProjectKey || ''}"`,
     return {
       intent: 'chat',
       entities: {
-        chatReply: 'Halo! 👋 Saya **Plane AI Command Center**.\n\nSaya bisa membantu Anda mengelola project Plane secara otomatis. Contoh perintah:\n- *"Tampilkan task PROJECT1"*\n- *"Buat task fix login bug"*\n- *"Pindahkan task PROJECT1-31 ke Done"*\n- *"Masukin 3 task: 1. Fix bug 2. Update UI 3. Test API"*',
+        chatReply: 'Halo! 👋 Saya **Plane AI Command Center**.\n\nSaya bisa membantu Anda mengelola project Plane secara otomatis. Contoh perintah:\n- *"Tampilkan task PROJECT1"*\n- *"Buat task fix login bug"*\n- *"Pecah feature User Authentication menjadi subtask"*\n- *"Pindahkan task PROJECT1-31 ke Done"*\n- *"Masukin 3 task: 1. Fix bug 2. Update UI 3. Test API"*',
       },
       confidence: 0.9,
     };
@@ -121,6 +124,16 @@ export function parseIntent(message: string, context?: ConversationContext): Int
       result.entities.state = state === 'selesai' ? 'done' : state === 'sedang berjalan' ? 'in progress' : state;
       break;
     }
+  }
+
+  // Check for Decomposition / Planning prompt
+  const isDecomposePrompt = /pecah|decompose|break down|bagikan|rencanakan|plan (?:sprint|feature)?/i.test(lowerMessage);
+  if (isDecomposePrompt) {
+    const titleMatch = message.replace(/^.*?(?:pecah|decompose|break down|rencanakan|plan)\s+(?:feature|sprint|task)?\s*(?:yaitu|berikut|:)?\s*/i, '');
+    result.intent = 'decompose';
+    result.entities.title = titleMatch.trim() || message;
+    result.confidence = 0.85;
+    return result;
   }
 
   const isCreationPrompt = /buat|create|masukin|tambah|input|new task|new issue/i.test(lowerMessage);
@@ -196,6 +209,39 @@ export function parseIntent(message: string, context?: ConversationContext): Int
  * Builds an ActionPlan for mutating intents so that changes can be previewed
  * and explicitly approved before modifying workspace data.
  */
+export async function buildActionPlanFromIntentAsync(
+  intentResult: IntentResult,
+  context?: ConversationContext
+): Promise<ActionPlan | null> {
+  const targetProject = intentResult.entities.projectKey || context?.activeProjectKey || 'PROJECT';
+  const planId = `plan_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+  if (intentResult.intent === 'decompose' || intentResult.intent === 'plan') {
+    const promptText = intentResult.entities.title || 'Feature';
+    const subtasks = await decomposeFeatureToSubtasks(promptText, targetProject);
+
+    const steps: ActionStep[] = subtasks.map(st => ({
+      operation: 'createIssue',
+      target: targetProject,
+      changes: { title: st.title, priority: st.priority || 'medium' },
+    }));
+
+    const plan: ActionPlan = {
+      id: planId,
+      intent: intentResult.intent,
+      summary: `Dekomposisi "${promptText}" menjadi ${subtasks.length} subtask di project ${targetProject}`,
+      risk: 'medium',
+      requiresApproval: true,
+      steps,
+    };
+
+    const validated = ActionPlanSchema.safeParse(plan);
+    return validated.success ? validated.data : null;
+  }
+
+  return buildActionPlanFromIntent(intentResult, context);
+}
+
 export function buildActionPlanFromIntent(
   intentResult: IntentResult,
   context?: ConversationContext

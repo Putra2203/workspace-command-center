@@ -8,7 +8,7 @@ export interface ActionCard {
 }
 
 export interface IntentResult {
-  intent: 'list_projects' | 'list_issues' | 'create_issue' | 'batch_create_issues' | 'get_issue' | 'update_issue' | 'help' | 'chat' | 'unknown';
+  intent: 'list_projects' | 'list_issues' | 'create_issue' | 'batch_create_issues' | 'decompose' | 'plan' | 'get_issue' | 'update_issue' | 'help' | 'chat' | 'unknown';
   entities: {
     projectKey?: string;
     issueKey?: string;

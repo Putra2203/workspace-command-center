@@ -1,14 +1,17 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Activity, AlertTriangle, Ban, CalendarClock, Flame } from 'lucide-react';
+import { Activity, AlertTriangle, Ban, CalendarClock, Flame, Clock } from 'lucide-react';
 import { computeMyDayBuckets, type PlaneStateLike, type WorkItemLike } from '@/domain/work_items/my-day';
 import { scoreTask } from '@/domain/work_items/scoring';
+import { detectStaleAndBlockedWork } from '@/domain/work_items/stale-work';
 
 interface Issue extends WorkItemLike {
   name: string;
   sequence_id: number;
   priority?: string;
+  state?: any;
+  updated_at?: string;
   project_detail?: { identifier: string };
 }
 
@@ -25,9 +28,11 @@ export function MyDayDashboard({ issues, states, currentUserId, activeProjectKey
     [issues, states, currentUserId]
   );
 
-  // Note: blockerCount is always 0 here — Plane issue relations (which
-  // other issues this one blocks) aren't fetched anywhere in this app yet.
-  // Scoring still ranks correctly on urgency + priority alone.
+  const staleOrBlockedList = useMemo(
+    () => detectStaleAndBlockedWork(issues, states, 14),
+    [issues, states]
+  );
+
   const recommended = useMemo(
     () =>
       activeIssues
@@ -77,6 +82,25 @@ export function MyDayDashboard({ issues, states, currentUserId, activeProjectKey
         })}
       </div>
 
+      {staleOrBlockedList.length > 0 && (
+        <div className="mb-6 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
+          <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 mb-2">
+            <Clock className="w-4 h-4" />
+            <span>Stale or Blocked Work Detected ({staleOrBlockedList.length})</span>
+          </div>
+          <div className="space-y-1">
+            {staleOrBlockedList.slice(0, 3).map((item) => (
+              <div key={item.id} className="text-xs text-[#FAFAFA] flex items-center justify-between">
+                <span className="truncate max-w-md">{item.title}</span>
+                <span className="text-[10px] font-mono text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30">
+                  {item.reason === 'stale' ? `${item.daysInactive}d inactive` : item.reason}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mb-6">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-[#71717A] mb-2">Recommended Next</h3>
         {recommended.length === 0 ? (
@@ -116,17 +140,28 @@ function IssueBucket({
 }) {
   return (
     <div className="mb-6">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-[#71717A] mb-2">{title} ({issues.length})</h3>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-[#71717A]">{title}</h3>
+        <span className="text-[10px] font-mono text-[#52525B] bg-[#111113] px-2 py-0.5 rounded border border-white/5">
+          {issues.length}
+        </span>
+      </div>
+
       {issues.length === 0 ? (
         <p className="text-xs text-[#52525B] px-1">{emptyText}</p>
       ) : (
         <div className="space-y-1.5">
           {issues.map(issue => (
-            <div key={issue.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-[#111113] border border-white/5 hover:border-white/10 transition-colors">
-              <span className="text-xs text-[#71717A] font-mono shrink-0">
-                {issue.project_detail?.identifier || activeProjectKey}-{issue.sequence_id}
-              </span>
-              <span className="text-sm text-[#FAFAFA] truncate">{issue.name}</span>
+            <div key={issue.id} className="flex items-center justify-between p-2.5 rounded-lg bg-[#111113] border border-white/5 hover:border-white/10 transition-colors">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="text-xs text-blue-400 font-mono shrink-0">
+                  {issue.project_detail?.identifier || activeProjectKey}-{issue.sequence_id}
+                </span>
+                <span className="text-sm text-[#FAFAFA] truncate">{issue.name}</span>
+              </div>
+              {issue.target_date && (
+                <span className="text-[10px] font-mono text-[#71717A] shrink-0 ml-2">{issue.target_date}</span>
+              )}
             </div>
           ))}
         </div>

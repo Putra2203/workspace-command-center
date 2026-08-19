@@ -23,7 +23,7 @@ function issue(overrides: Partial<PlaneIssue>): PlaneIssue {
 }
 
 describe('InsightService.getDailyBriefing', () => {
-  it('keeps summary null (AI text generation is Phase 2+)', async () => {
+  it('keeps summary null when no AI text generation is requested', async () => {
     const service = new InsightService(fakePlaneService([]));
     const briefing = await service.getDailyBriefing('proj-1', ME);
     expect(briefing.summary).toBeNull();
@@ -63,5 +63,25 @@ describe('InsightService.getDailyBriefing', () => {
 
     expect(planeService.listIssues).toHaveBeenCalledWith('proj-42');
     expect(planeService.listStates).toHaveBeenCalledWith('proj-42');
+  });
+});
+
+describe('InsightService.getWeeklyReview', () => {
+  it('computes 7-day created and completed task metrics correctly', async () => {
+    const now = new Date('2026-08-19T10:00:00Z');
+    const threeDaysAgo = new Date('2026-08-16T10:00:00Z').toISOString();
+    const tenDaysAgo = new Date('2026-08-09T10:00:00Z').toISOString();
+
+    const planeService = fakePlaneService([
+      issue({ id: 'i1', state: 'state-done', created_at: threeDaysAgo, updated_at: threeDaysAgo }),
+      issue({ id: 'i2', state: 'state-todo', created_at: threeDaysAgo, updated_at: threeDaysAgo }),
+      issue({ id: 'i3', state: 'state-done', created_at: tenDaysAgo, updated_at: tenDaysAgo }),
+    ]);
+
+    const service = new InsightService(planeService);
+    const weekly = await service.getWeeklyReview('proj-1', ME, now);
+
+    expect(weekly.metrics.created7Days).toBe(2);
+    expect(weekly.metrics.completed7Days).toBe(1);
   });
 });

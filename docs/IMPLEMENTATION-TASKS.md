@@ -306,32 +306,32 @@ Goal: replace today's "parse intent → execute immediately" `/api/ai` route wit
 
 Goal: the PRD's "heavy" AI features, built on top of the Plan→Approve→Execute flow from Phase 2.
 
-### P3-01 — Task decomposition
+### P3-01 — Task decomposition ✅ Done
 - **Priority**: High · **Effort**: L · **Depends on**: P2-02
 - **Task**: `/api/ai/plan` handles a `decompose` intent producing an `ActionPlan` whose steps are `createIssue` calls for each generated subtask, reviewed like any other plan.
 - **Acceptance criteria**: "break this feature into subtasks" produces a reviewable plan creating N child issues on approval.
 
-### P3-02 — Work plan generation
+### P3-02 — Work plan generation ✅ Done
 - **Priority**: Medium · **Effort**: L · **Depends on**: P3-01
 - **Task**: `plan this sprint`/`plan this feature` intent generates a phased plan (editable before approval), reusing the decomposition step logic where possible.
 - **Acceptance criteria**: output is an editable, structured plan matching the PRD's `ai_architecture.md` prompt example shape.
 
-### P3-03 — AI triage of inbox items
+### P3-03 — AI triage of inbox items ✅ Done
 - **Priority**: Medium · **Effort**: M · **Depends on**: P0-04
 - **Task**: new `inbox_items` Supabase table + `GET/POST /api/inbox` (capture untriaged raw text) + `POST /api/inbox/:id/triage` (AI suggests title/project/labels, converts to a Plane issue on approval).
 - **Acceptance criteria**: pasting raw text into the inbox and triaging it produces a correctly-labeled Plane issue after approval.
 
-### P3-04 — Duplicate detection
+### P3-04 — Duplicate detection ✅ Done
 - **Priority**: Medium · **Effort**: M · **Depends on**: —
 - **Task**: before issue creation, run a string-similarity check (e.g. `fuzzball` — not currently installed, add as a dependency) against existing issue titles in the target project; show candidates, optionally ask the AI to describe why they're similar.
 - **Acceptance criteria**: creating a near-duplicate title surfaces at least the one obvious match in a test project.
 
-### P3-05 — Blocker & stale-work detection
+### P3-05 — Blocker & stale-work detection ✅ Done
 - **Priority**: Medium · **Effort**: S · **Depends on**: P1-04
 - **Task**: deterministic rules (no updates in 14 days = stale; explicit blocking relationship or missing assignee = blocked) surfaced in a dashboard section, with an optional AI-generated suggested resolution.
 - **Acceptance criteria**: a manually-created stale/blocked test issue appears in the correct section.
 
-### P3-06 — Weekly review summary
+### P3-06 — Weekly review summary ✅ Done
 - **Priority**: Low · **Effort**: M · **Depends on**: P1-02
 - **Task**: `GET /api/insights/weekly` mirroring `insights/daily`'s shape (completed/created/blocked counts), with an optional AI-generated text summary.
 - **Acceptance criteria**: route returns correct week-over-week counts; AI summary is optional/omittable.

@@ -1,9 +1,10 @@
 import { NextRequest } from 'next/server';
-import { parseIntentAsync, buildActionPlanFromIntent } from '@/lib/ai/intent-engine';
+import { parseIntentAsync, buildActionPlanFromIntentAsync } from '@/lib/ai/intent-engine';
 import { classifyIntentTier } from '@/lib/ai/router';
 import { executeIntent } from '@/lib/ai/executor';
 import { planeService } from '@/infrastructure/plane/PlaneClient';
 import { getCurrentUserContext } from '@/lib/context/current-user';
+import { findSimilarIssues } from '@/domain/work_items/duplicate-detection';
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,10 +26,26 @@ export async function POST(request: NextRequest) {
 
     const tier = classifyIntentTier(intentResult.intent);
 
-    // If intent requires an ActionPlan preview before mutation
-    const plan = buildActionPlanFromIntent(intentResult, { activeProjectId: projectId, activeProjectKey: projectId });
+    // Build plan asynchronously (supports decomposition & duplicate checks)
+    const plan = await buildActionPlanFromIntentAsync(intentResult, { activeProjectId: projectId, activeProjectKey: projectId });
 
     if (plan && plan.requiresApproval) {
+      // Duplicate detection check
+      if (projectId && (intentResult.intent === 'create_issue' || intentResult.intent === 'batch_create_issues')) {
+        try {
+          const realProjectId = await planeService.resolveProjectId(projectId);
+          const existingIssues = await planeService.listIssues(realProjectId);
+          const firstTitle = (plan.steps[0]?.changes?.title as string) || '';
+          const duplicates = findSimilarIssues(firstTitle, existingIssues, 65);
+
+          if (duplicates.length > 0) {
+            plan.summary += ` ⚠️ (Kemungkinan duplikat ditemukan: "${duplicates[0].title}" - ${duplicates[0].similarity}% mirip)`;
+          }
+        } catch (dupErr) {
+          console.warn('Duplicate check failed silently:', dupErr);
+        }
+      }
+
       return Response.json({
         reply: `Silakan tinjau rencana tindakan berikut untuk project **${plan.steps[0]?.target || projectId || 'Plane'}** sebelum dieksekusi:`,
         plan,
@@ -53,7 +70,7 @@ export async function POST(request: NextRequest) {
       } else if (intentResult.intent === 'get_issue') {
         reply = `Detail issue **${intentResult.entities.issueKey}**:`;
       } else if (intentResult.intent === 'help') {
-        reply = 'Saya dapat membantu Anda mengelola project dan task di Plane. Berikut adalah beberapa perintah yang bisa Anda coba:';
+        reply = 'Saya dapat membantu Anda mengelola project dan task di Plane. Perintah yang bisa Anda coba:\n- *"Pecah feature login menjadi subtask"*\n- *"Buat task fix bug"*\n- *"Tampilkan daftar project"*';
       } else {
         reply = 'Perintah berhasil diproses.';
       }

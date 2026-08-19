@@ -8,7 +8,7 @@ export interface WorkItemLike {
   id: string;
   target_date?: string;
   assignees?: string[];
-  state?: unknown;
+  state?: any;
   state_detail?: { id?: string; name: string; group: string };
 }
 
