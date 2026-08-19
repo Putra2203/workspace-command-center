@@ -44,6 +44,7 @@ export interface PlaneIssue {
   start_date?: string;
   target_date?: string;
   assignees?: string[];
+  project?: string;
   project_detail?: { identifier: string; name?: string };
   created_at?: string;
   updated_at?: string;
