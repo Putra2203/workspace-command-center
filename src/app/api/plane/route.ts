@@ -62,6 +62,17 @@ export async function GET(request: NextRequest) {
         const data = await planeService.listCycles(projectId);
         return Response.json(data);
       }
+      case 'listCycleIssues': {
+        const cycleId = searchParams.get('cycleId');
+        if (!projectId || !cycleId) return Response.json({ error: 'Missing projectId or cycleId' }, { status: 400 });
+        try {
+          const data = await planeService.listCycleIssues(projectId, cycleId);
+          return Response.json(data);
+        } catch (err) {
+          console.error('API Route listCycleIssues error:', err);
+          return Response.json([]);
+        }
+      }
       case 'listModules': {
         if (!projectId) return Response.json({ error: 'Missing projectId' }, { status: 400 });
         const data = await planeService.listModules(projectId);

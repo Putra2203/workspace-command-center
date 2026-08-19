@@ -397,6 +397,52 @@ export class PlaneService {
   }
 
   /**
+   * List issues for a specific cycle
+   */
+  async listCycleIssues(projectId: string, cycleId: string): Promise<PlaneIssue[]> {
+    try {
+      const slug = this.defaultWorkspaceSlug;
+      const realProjectId = await this.resolveProjectId(projectId);
+      
+      // Try primary official cycle-issues endpoint
+      try {
+        const response = await this.client.get(`/workspaces/${slug}/projects/${realProjectId}/cycles/${cycleId}/cycle-issues/`);
+        const results = response.data.results || response.data;
+        if (Array.isArray(results)) {
+          return results.map((item: any) => item.issue_detail || item);
+        }
+      } catch {
+        // ignore & try next fallback
+      }
+
+      // Try secondary /cycles/{cycleId}/issues/ endpoint
+      try {
+        const response = await this.client.get(`/workspaces/${slug}/projects/${realProjectId}/cycles/${cycleId}/issues/`);
+        const results = response.data.results || response.data;
+        if (Array.isArray(results)) {
+          return results.map((item: any) => item.issue_detail || item);
+        }
+      } catch {
+        // ignore & try next fallback
+      }
+
+      // Fallback: list issues with cycle query parameter
+      try {
+        const response = await this.client.get(`/workspaces/${slug}/projects/${realProjectId}/issues/`, {
+          params: { cycle: cycleId },
+        });
+        const results = response.data.results || response.data;
+        return Array.isArray(results) ? results : [];
+      } catch {
+        return [];
+      }
+    } catch (err) {
+      console.error('Error in listCycleIssues:', err);
+      return [];
+    }
+  }
+
+  /**
    * List modules for a project
    */
   async listModules(projectId: string): Promise<PlaneModule[]> {

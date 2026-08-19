@@ -44,7 +44,7 @@ export interface PlaneIssue {
   start_date?: string;
   target_date?: string;
   assignees?: string[];
-  project_detail?: { identifier: string; name: string };
+  project_detail?: { identifier: string; name?: string };
   created_at?: string;
   updated_at?: string;
 }
@@ -67,6 +67,9 @@ export interface PlaneCycle {
   name: string;
   start_date?: string;
   end_date?: string;
+  project_detail?: { id?: string; name?: string; identifier?: string };
+  total_issues?: number;
+  completed_issues?: number;
 }
 
 export interface PlaneModule {
