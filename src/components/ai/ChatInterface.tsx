@@ -84,7 +84,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
   const suggestedCommands = [
     "Tampilkan semua task",
     "Buat issue baru untuk fix login bug",
-    "Pindahkan task BSJ7PHASE2-2 ke Done",
+    "Pindahkan task PROJECT1-2 ke Done",
     "Tampilkan task overdue minggu ini"
   ];
 

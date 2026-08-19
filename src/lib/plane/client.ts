@@ -152,7 +152,7 @@ export class PlaneService {
   }
 
   /**
-   * Resolve issue sequence key (e.g. BSJ7PHASE2-31 or 31) or title to issue UUID
+   * Resolve issue sequence key (e.g. PROJECT1-31 or 31) or title to issue UUID
    */
   async resolveIssueId(projectId: string, issueIdOrKey: string): Promise<string> {
     if (this.isUUID(issueIdOrKey)) {
@@ -176,7 +176,7 @@ export class PlaneService {
     }
 
     throw new Error(
-      `Issue '${issueIdOrKey}' was not found in project '${projectId}'. Please specify a valid issue sequence key (e.g. BSJ7PHASE2-31 or 31).`
+      `Issue '${issueIdOrKey}' was not found in project '${projectId}'. Please specify a valid issue sequence key (e.g. PROJECT1-31 or 31).`
     );
   }
 

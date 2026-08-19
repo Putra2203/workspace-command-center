@@ -71,7 +71,7 @@ Active Project Context: "${context?.activeProjectKey || ''}"`,
     return {
       intent: 'chat',
       entities: {
-        chatReply: 'Halo! 👋 Saya **Plane AI Command Center**.\n\nSaya bisa membantu Anda mengelola project Plane secara otomatis. Contoh perintah:\n- *"Tampilkan task BSJ7PHASE2"*\n- *"Buat task fix TikTok login bug"*\n- *"Pindahkan task BSJ7PHASE2-31 ke Done"*\n- *"Masukin 3 task: 1. Fix bug 2. Update UI 3. Test API"*',
+        chatReply: 'Halo! 👋 Saya **Plane AI Command Center**.\n\nSaya bisa membantu Anda mengelola project Plane secara otomatis. Contoh perintah:\n- *"Tampilkan task PROJECT1"*\n- *"Buat task fix login bug"*\n- *"Pindahkan task PROJECT1-31 ke Done"*\n- *"Masukin 3 task: 1. Fix bug 2. Update UI 3. Test API"*',
       },
       confidence: 0.9,
     };
@@ -91,7 +91,7 @@ export function parseIntent(message: string, context?: ConversationContext): Int
     confidence: 0,
   };
 
-  // 1. Extract Project key (e.g. BSJ7PHASE2 or BSJ7)
+  // 1. Extract Project key (e.g. a Plane project identifier like PROJECT1)
   const projectMatch = message.match(/\b([A-Z0-9]{2,12})\b/);
   if (projectMatch && !projectMatch[1].includes('-')) {
     result.entities.projectKey = projectMatch[1];
@@ -99,7 +99,7 @@ export function parseIntent(message: string, context?: ConversationContext): Int
     result.entities.projectKey = context.activeProjectKey;
   }
 
-  // 2. Extract Issue key (e.g. BSJ7PHASE2-31)
+  // 2. Extract Issue key (e.g. PROJECT1-31)
   const issueMatch = message.match(/\b([A-Z0-9]+-\d+)\b/i);
   if (issueMatch) {
     result.entities.issueKey = issueMatch[1].toUpperCase();

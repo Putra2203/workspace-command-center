@@ -1,6 +1,6 @@
 'use client';
 
-import { useWorkspaceStore } from '@/lib/store/workspace';
+import { useWorkspaceStore } from '@/stores/workspace-store';
 import { TerminalSquare, LayoutGrid, ListTodo, Home, Menu } from 'lucide-react';
 
 export function MobileNav() {

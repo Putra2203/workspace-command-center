@@ -34,13 +34,13 @@ Goal: remove hardcoded values, stand up the domain-service layer skeleton and `A
 - **Task**: create `src/lib/context/current-user.ts` exporting a `CurrentUserContext` type (`userId`, `name`, `email`, `planeMemberId`, `workspaceId`) and a `getCurrentUserContext()` that calls `PlaneService.getMe()` server-side (already implemented in `src/lib/plane/client.ts`) instead of reading a hardcoded default. Update `workspace-store.ts` to initialize `currentUser` as `null` and populate it from a real `/api/plane?action=getMe` call on app load (`page.tsx`). Remove all 4 hardcoded-UUID fallbacks and the 2 name-substring checks; use `currentUser.id` directly and fail closed (show "sign in" / error state) if it's missing instead of silently falling back to a specific person's UUID.
 - **Acceptance criteria**: `grep -r "75ca7488-91e2-4455-83cb-92526b0e69e5" src/` returns zero matches. `grep -rn "erdavid\|erdin" src/lib src/app/page.tsx` returns zero logic matches (UI copy strings are handled in P0-02).
 
-### P0-02 — Remove hardcoded project identifiers
+### P0-02 — Remove hardcoded project identifiers ✅ Done
 - **Priority**: High · **Effort**: S · **Depends on**: P0-01
 - **Problem**: `'BSJ7PHASE2'` / `'BSJ7PHASE3'` / `'BSJ7'` hardcoded as default/fallback project at `src/app/page.tsx:66,200,205,360`, plus "Erdavid"-specific UI copy (`page.tsx:240,300,377`, `Sidebar.tsx:220,223`) and an example command in `src/lib/ai/intent-engine.ts:74` that name-drops `BSJ7PHASE2`.
 - **Task**: replace the hardcoded default-project logic with "last-used project" (persisted in the workspace store / `localStorage`) falling back to the first project returned by `listProjects()` — no specific identifier baked in. Genericize the UI copy (`"My Tasks"` instead of `"My Tasks (Erdavid)"`, `"No tasks assigned to you"` instead of `"...to Erdavid"`, remove the `BSJ7`-specific button label). Update the intent-engine's example command text to a generic placeholder.
 - **Acceptance criteria**: `grep -rn "BSJ7" src/` returns zero matches; loading the app with a different Plane workspace/project set works without code changes.
 
-### P0-03 — Consolidate duplicate workspace-store import path
+### P0-03 — Consolidate duplicate workspace-store import path ✅ Done
 - **Priority**: Low · **Effort**: S · **Depends on**: —
 - **Problem**: `src/lib/store/workspace.ts` is a pure re-export shim of `src/stores/workspace-store.ts`. `CommandPalette.tsx` and `MobileNav.tsx` import via the shim; everything else imports the canonical path directly.
 - **Task**: point all imports at `@/stores/workspace-store` and delete `src/lib/store/workspace.ts`.

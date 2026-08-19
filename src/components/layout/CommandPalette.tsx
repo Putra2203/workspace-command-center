@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useWorkspaceStore } from '@/lib/store/workspace';
+import { useWorkspaceStore } from '@/stores/workspace-store';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, TerminalSquare, LayoutGrid, ListTodo, Plus, Search as SearchIcon } from 'lucide-react';
 

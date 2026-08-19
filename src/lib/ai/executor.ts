@@ -37,7 +37,7 @@ export async function executeIntent(
         
         const realProjectId = await planeService.resolveProjectId(intent.entities.projectKey);
         
-        // Resolve project human-readable identifier (e.g. BSJ7PHASE2)
+        // Resolve project human-readable identifier (e.g. a Plane project's short code)
         const projects = await planeService.listProjects().catch(() => []);
         const foundProj = projects.find(p => p.id === realProjectId || p.identifier?.toLowerCase() === intent.entities.projectKey?.toLowerCase());
         const displayKey = foundProj?.identifier || 'PROJECT';
@@ -237,7 +237,7 @@ export async function executeIntent(
           type: 'info',
           title: 'Available AI Commands',
           data: {
-            message: 'You can say: "tampilkan task BSJ7PHASE2", "buat 3 task di BSJ7PHASE2: 1. Fix TikTok login 2. Responsive UI 3. Test API", or "pindahkan task BSJ7PHASE2-2 ke Done".',
+            message: 'You can say: "tampilkan task PROJECT1", "buat 3 task di PROJECT1: 1. Fix login bug 2. Responsive UI 3. Test API", or "pindahkan task PROJECT1-2 ke Done".',
           },
         });
         break;
