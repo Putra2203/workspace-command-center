@@ -39,3 +39,30 @@ model InboxItem {
 
   @@map("inbox_items")
 }
+
+model AutomationRule {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  trigger   String
+  action    String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("automation_rules")
+}
+
+model AiUsage {
+  id           String   @id @default(uuid())
+  timestamp    DateTime @default(now())
+  feature      String
+  model        String
+  inputTokens  Int      @map("input_tokens")
+  outputTokens Int      @map("output_tokens")
+  totalTokens  Int      @map("total_tokens")
+  durationMs   Int      @map("duration_ms")
+  success      Boolean  @default(true)
+  error        String?
+
+  @@map("ai_usage")
+}

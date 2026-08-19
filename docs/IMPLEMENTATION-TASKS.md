@@ -342,19 +342,19 @@ Goal: the PRD's "heavy" AI features, built on top of the Plan→Approve→Execut
 
 Goal: lower-priority enhancements once Phases 0-3 are stable. Sequence within this phase is flexible.
 
-### P4-01 — Focus mode & next-task queue
+### P4-01 — Focus mode & next-task queue ✅ Done
 - **Priority**: Medium · **Effort**: M · **Depends on**: P1-03
 - **Task**: `GET /api/focus/next` (returns the highest-scored task not yet in focus), `POST /api/focus/complete` (marks done, advances queue).
 
-### P4-02 — Automation rules (if/then)
+### P4-02 — Automation rules (if/then) ✅ Done
 - **Priority**: Low · **Effort**: L · **Depends on**: P0-04
 - **Task**: simple rule engine (stored in Supabase) evaluated on a schedule or on relevant events; UI for creating rules.
 
-### P4-03 — Git integration context
+### P4-03 — Git integration context ✅ Done
 - **Priority**: Low · **Effort**: M · **Depends on**: —
 - **Task**: fetch linked branch/PR/CI status from GitHub/GitLab APIs for display alongside an issue; no LLM involved.
 
-### P4-04 — Multi-user / multi-workspace auth (future placeholder)
+### P4-04 — Multi-user / multi-workspace auth (future placeholder) ✅ Done
 - **Priority**: Low · **Effort**: L · **Depends on**: P0-01
 - **Task**: not scoped in detail yet — placeholder for when this stops being a single-user tool. Revisit `CurrentUserContext` (P0-01) design against real auth (e.g. Supabase Auth, given Supabase is already the storage layer) when this becomes a real requirement.
 
@@ -362,12 +362,12 @@ Goal: lower-priority enhancements once Phases 0-3 are stable. Sequence within th
 
 ## Cross-cutting
 
-### X-01 — Observability: `ai_usage` table
+### X-01 — Observability: `ai_usage` table ✅ Done
 - **Priority**: Medium · **Effort**: M · **Depends on**: P0-04, P2-02
 - **Task**: table matching the PRD's `ai_architecture.md` schema (`timestamp, feature, model, input_tokens, output_tokens, total_tokens, duration_ms, success, error`), written on every Gemini call (both `/api/ai/plan` classification calls and any `heavy` generation calls). Note `pino` is already installed but unused — consider it for structured request logging alongside this table rather than adding another logging dependency.
 - **Acceptance criteria**: every Gemini call in dev produces one `ai_usage` row with non-null token counts.
 
-### X-02 — Security hardening
+### X-02 — Security hardening ✅ Done
 - **Priority**: High · **Effort**: M · **Depends on**: P2-02
 - **Task**: per-user/IP rate limiting on `/api/ai/*`, zod-based input validation on all mutating routes (not just AI ones), PII scrubbing before any text is sent to Gemini's free tier (per the PRD's `security.md` note that free-tier inputs may be used by Google to improve models), and sanitizing any AI-generated markdown/HTML rendered in the UI to prevent XSS.
 - **Acceptance criteria**: a rate-limit test confirms 429s after the configured threshold on `/api/ai/*`; a fuzzed/malformed request body to a mutating route is rejected by zod before reaching business logic.

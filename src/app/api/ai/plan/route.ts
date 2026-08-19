@@ -5,9 +5,22 @@ import { executeIntent } from '@/lib/ai/executor';
 import { planeService } from '@/infrastructure/plane/PlaneClient';
 import { getCurrentUserContext } from '@/lib/context/current-user';
 import { findSimilarIssues } from '@/domain/work_items/duplicate-detection';
+import { checkRateLimit } from '@/lib/security/rate-limiter';
+import { scrubPII } from '@/lib/security/pii-scrubber';
+import { logAiUsage } from '@/infrastructure/telemetry/ai-usage-logger';
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now();
   try {
+    const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
+    const rateCheck = checkRateLimit(ip, 30);
+    if (!rateCheck.success) {
+      return Response.json(
+        { error: 'Rate limit exceeded. Please wait a moment before sending more AI requests.' },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { message, projectId, userScope } = body;
 
@@ -15,7 +28,9 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Valid message string is required' }, { status: 400 });
     }
 
-    const intentResult = await parseIntentAsync(message, {
+    const cleanMessage = scrubPII(message);
+
+    const intentResult = await parseIntentAsync(cleanMessage, {
       activeProjectId: projectId,
       activeProjectKey: projectId,
     });
@@ -28,6 +43,16 @@ export async function POST(request: NextRequest) {
 
     // Build plan asynchronously (supports decomposition & duplicate checks)
     const plan = await buildActionPlanFromIntentAsync(intentResult, { activeProjectId: projectId, activeProjectKey: projectId });
+
+    // Telemetry log
+    logAiUsage({
+      feature: `intent_plan_${intentResult.intent}`,
+      model: tier === 'heavy' ? 'gemini-2.5-flash' : 'gemini-2.5-flash-lite',
+      inputTokens: Math.ceil(cleanMessage.length / 4),
+      outputTokens: 100,
+      durationMs: Date.now() - startTime,
+      success: true,
+    });
 
     if (plan && plan.requiresApproval) {
       // Duplicate detection check
