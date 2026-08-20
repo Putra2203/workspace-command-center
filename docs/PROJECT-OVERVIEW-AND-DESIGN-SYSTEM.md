@@ -2,56 +2,79 @@
 
 ## 1. Tentang Proyek (Project Overview)
 
-**Plane AI Command Center** adalah platform *workstation* dan *management dashboard* berbasis AI generasi baru yang mengintegrasikan API **Plane.so** (Open-source Jira alternative) dengan kemampuan pemrosesan **Google Gemini AI**. 
+**Plane AI Command Center** adalah platform *workstation* dan *management dashboard* berbasis AI generasi baru yang mengintegrasikan API **Plane.so** (Open-source Jira alternative) dengan kemampuan pemrosesan **Google Gemini 2.5 AI** dan arsitektur database terdistribusi **Supabase PostgreSQL**.
 
-Proyek ini dirancang untuk memberikan pengalaman mengelola tugas, tiket kerja, dan alur proyek secara intuitif, cepat, responsif di seluruh perangkat (Mobile & Desktop), serta dilengkapi asisten AI yang dapat melakukan pemecahan tugas (*task decomposition*), otomatisasi *triage*, dan analisis produktivitas harian.
+Proyek ini dirancang untuk memberikan pengalaman mengelola tugas, tiket kerja, dan alur proyek secara intuitif, cepat, responsif di seluruh perangkat (Mobile & Desktop), serta dilengkapi asisten AI cerdas yang mendukung pemecahan tugas (*task decomposition*), otomatisasi *triage*, analisis visual tangkapan layar (*multi-modal screenshot-to-task*), pembuatan task massal terstruktur, dan riwayat obrolan berbasis cloud.
 
 ---
 
 ## 2. Arsitektur & Tech Stack Core
 
-| Layer | Teknologi / Library |
-| :--- | :--- |
-| **Framework** | Next.js 16 (App Router, Turbopack, React 19) |
-| **Styling** | Tailwind CSS v4, Lucide React Icons |
-| **Animation & Motion** | Framer Motion (`motion/react`) |
-| **State & Data Fetching**| Zustand (Workspace Store), TanStack React Query v5 |
-| **ORM & Database** | Prisma ORM 6, Supabase PostgreSQL |
-| **AI Integration** | Google Gemini SDK (`@google/genai`) |
-| **Sanitization & Security**| DOMPurify (`dompurify`), HTTP Session Cookie Auth via Next.js 16 Proxy |
+| Layer | Teknologi / Library | Catatan Arsitektur |
+| :--- | :--- | :--- |
+| **Framework** | Next.js 16 (App Router, Turbopack, React 19) | Server & Client Components, Route Handlers |
+| **Styling** | Tailwind CSS v4, Lucide React Icons | Modern CSS variables, Glassmorphism, Clean Spacing |
+| **Animation & Motion** | Framer Motion (`motion/react`) | Spring physics, Layout animations, Gesture drag |
+| **State Management** | Zustand (Workspace Store), TanStack React Query v5 | Global workspace context, caching, optimistic mutations |
+| **ORM & Database** | Prisma ORM 7 (`@prisma/adapter-pg`), Supabase PostgreSQL | Connection pooling, multi-tenant models, Query Cache |
+| **AI Integration** | Google Gemini SDK (`@google/genai`) | Dual-Tier Routing (Flash Lite & Flash Vision 2.5) |
+| **Sanitization & Security**| DOMPurify, PII Scrubber, In-Memory Rate Limiter, HTTP-only Cookie Auth | Data masking, anti-spam, safe HTML rendering |
 
 ---
 
 ## 3. Fitur Utama Aplikasi
 
-1. **My Day & Workstation (`/day`)**:
-   - Ringkasan statistik harian (*Metrics Strip*): **Overdue**, **Due Today**, **Blocked**, dan **Active Tasks**.
-   - **Focus Queue**: Rekomendasi task prioritas utama berbasis algoritma skor deterministik.
-   - **Unassigned Ticket Pool**: Kolam tiket kerja yang belum memiliki penanggung jawab dengan fitur klaim instan (*Claim*).
-   - **Quick Task Capture**: Form penambahan tugas kilat secara langsung.
+### 1. My Day & Focus Workstation (`/day`)
+- **Metrics Strip**: Statistik harian *Overdue*, *Due Today*, *Blocked*, dan *Active Tasks*.
+- **Focus Queue**: Rekomendasi task prioritas utama berbasis algoritma deterministik.
+- **Unassigned Ticket Pool**: Kolam tiket kerja tanpa pemilik dengan fitur klaim instan (*Claim*).
+- **Quick Task Capture**: Form penambahan tugas kilat secara langsung.
 
-2. **Kanban Board Responsif (`/board`)**:
-   - Board per kolom status proyek dengan dukungan *drag & drop* (dnd-kit).
-   - **Mobile Touch-Snap Scrolling**: Pengalaman swipe horizontal antar kolom yang presisi di layar HP (`w-[85vw] snap-center`).
-   - **Interactive Project Switcher Dropdown**: Dropdown pemilih proyek langsung dari baris header atas.
-   - **Bulk Priority Floating Action Bar**: Bar aksi masal untuk mengubah prioritas banyak tiket sekaligus.
+### 2. Kanban Board Responsif (`/board`)
+- **Interactive Board Columns**: Pengelompokan status proyek dengan dukungan *drag & drop* (`@dnd-kit`).
+- **Mobile Touch-Snap Scrolling**: Pengalaman swipe horizontal antar kolom yang presisi di layar ponsel (`w-[85vw] snap-center`).
+- **Interactive Project Switcher Dropdown**: Dropdown pemilih proyek langsung di header bar dengan dukungan **ALL Projects Mode**.
+- **Bulk Priority Floating Action Bar**: Bar aksi masal untuk mengubah prioritas banyak tiket sekaligus.
 
-3. **Work Item Detail Panel (Bottom Sheet)**:
-   - Panel detail tiket bergaya **Bottom Sheet** dengan transisi spring physics dan gestur *drag-to-dismiss* bawah.
-   - Pembersihan deskripsi HTML aman via `DOMPurify`.
-   - Manajemen sub-items (mark done, tambah sub-item) dan integrasi komentar Plane secara real-time.
-   - Dukungan padding khusus *iOS Safe Area Inset* (`pb-[max(1.5rem,env(safe-area-inset-bottom))]`).
+### 3. Work Item Detail Panel (Bottom Sheet)
+- **Fluid Bottom Sheet**: Transisi pegas (*Spring physics*) dengan gestur *drag-to-dismiss*.
+- **Sanitized HTML Description**: Pembersihan deskripsi HTML aman via `DOMPurify`.
+- **Sub-Items & Live Comments**: Manajemen sub-task dan integrasi komentar Plane secara real-time.
+- **iOS Safe Area Compliance**: Padding otomatis `pb-[max(1.5rem,env(safe-area-inset-bottom))]`.
 
-4. **AI Command Center (`/command`) & Auto-Triage**:
-   - Antarmuka chat NLP dengan AI untuk pencarian task, analisis produktivitas, pemecahan fitur menjadi sub-task, dan pembuatan *Action Plan*.
+### 4. AI Command Workstation (`/command`)
+- **Dual-Tier Intent Engine**:
+  - *Fast Tier (`gemini-2.5-flash-lite`)*: Kueri baca cepat, filter issue, dan percakapan natural.
+  - *Heavy Tier (`gemini-2.5-flash`)*: Dekomposisi fitur besar, analisis bug screenshot, dan deteksi intensitas tinggi.
+- **Multi-Modal Vision (Screenshot to Task)**:
+  - Dukungan unggah gambar / screenshot bug atau mockup desain UI (maks. 5MB).
+  - Gemini 2.5 Flash Vision otomatis mengekstrak judul bug, langkah reproduksi, prioritas, dan label menjadi tiket Plane.
+- **Structured Batch Task Creation (`1. Judul : Deskripsi`)**:
+  - Dukungan penempelan (*paste*) ringkasan tugas multi-baris untuk membuat banyak work items sekaligus dengan judul dan deskripsi terpisah secara otomatis.
+- **Plan-Approve-Execute Protocol & Interactive Plan Editor**:
+  - Kartu **`ActionPlanCard`** menampilkan estimasi risiko (`low`, `medium`, `high`) sebelum aksi dijalankan.
+  - Tombol **Edit** memungkinkan pengguna mengubah target project, judul langkah, atau parameter sebelum menekan *Setujui & Eksekusi*.
+- **Automated Duplicate Detection**:
+  - Peringatan potensi task duplikat (*similarity matching threshold 65%*) saat membuat task baru.
+- **Persistent Cloud Chat History**:
+  - Riwayat obrolan tersimpan otomatis di Supabase Postgres (`ChatSession` & `ChatMessage`).
+  - Drawer riwayat chat untuk membuka percakapan lama atau membuat sesi baru.
+- **Zero-Jank Throttled Auto-Scroll**:
+  - Animasi auto-scroll di-throttle dengan `requestAnimationFrame` untuk kenyamanan membaca saat teks mengalir.
 
-5. **Keamanan & Autentikasi (`/login` & Proxy)**:
-   - Halaman login privat bergaya *Dark Mode* (`/login`).
-   - Sistem proteksi halaman & API menggunakan cookie sesi `httpOnly` via **Next.js 16 Proxy** (`proxy.ts`).
-   - Tombol *Logout* di bagian profil sidebar.
+### 5. Universal `ALL` Projects Mode
+- Kemampuan membaca dan memodifikasi task di seluruh 11+ project Plane secara bersamaan.
+- Auto-resolution cerdas untuk key task seperti `BSJ7PHASE1-31` atau `JOMTERBANG-30`.
 
-6. **Unified Splash Screen & Loading State**:
-   - Animasi **Splash Screen** berbasis Framer Motion yang menyatukan durasi minimal estetis dengan sinkronisasi penuh data API Plane secara 100% tanpa adanya efek *double loading*.
+### 6. Keamanan & Dynamic Credential Resolution
+- **Zero Hardcoded Secrets**: Seluruh konfigurasi membaca strictly dari `process.env` dengan dynamic workspace auto-resolution via `GET /workspaces/`.
+- **PII Scrubber**: Otomatis menyamarkan email, token, dan data pribadi sebelum dikirim ke prompt AI.
+- **Rate Limiting**: Maksimal 30 request AI/menit per IP.
+- **AI Telemetry Logger**: Pencatatan metrik token dan latensi ke database `ai_usage`.
+
+### 7. Non-Blocking Splash & Loading Architecture
+- State `hasInitialLoaded` memastikan animasi **Splash Screen** hanya muncul 1x saat aplikasi dibuka (*initial boot*).
+- Sinkronisasi latar belakang dan pengiriman pesan chat berjalan mulus tanpa pernah memicu splash screen layar penuh.
 
 ---
 
@@ -59,7 +82,7 @@ Proyek ini dirancang untuk memberikan pengalaman mengelola tugas, tiket kerja, d
 
 ### A. Skema Warna (Dark Space Theme)
 
-Aplikasi ini menggunakan tema gelap yang dalam (*Deep Pitch Dark Space*) dengan kontras tinggi untuk kenyamanan mata saat bekerja dalam durasi panjang:
+Tema *Deep Pitch Dark Space* dengan kontras tinggi untuk efisiensi fokus kerja:
 
 - **Background Utama**: `#09090B` (Zinc-950)
 - **Kartu & Kontainer Surface**: `#111113` / `#18181B` (Zinc-900 dengan border tipis `border-white/10`)
@@ -100,16 +123,11 @@ Aplikasi ini menggunakan tema gelap yang dalam (*Deep Pitch Dark Space*) dengan 
 
 1. **Mobile-First & Touch Optimization**:
    - Layout responsif penuh untuk layar ponsel (< 640px).
-   - Kisi statistik 2x2 di halaman utama agar label tidak terpotong.
-   - Tombol aksi masif di bagian bawah diatur agar tidak tertutup oleh navigasi bawah HP (`MobileNav`).
-
+   - Padding clearance `pb-16 md:pb-0` pada container `<main>` memastikan seluruh input chat AI dan tombol aksi tidak tertutup oleh navigasi bawah `MobileNav`.
 2. **Motion & Dynamic Micro-Interactions**:
    - Transisi pegas (*Spring physics*) pada modal dan Bottom Sheet.
    - Animasi unmount halus menggunakan `<AnimatePresence>` saat berpindah atau menutup panel detail.
-   - Indikator berdenyut (*pulsing aura ring*) pada logo dan tombol loading.
-
 3. **Optimistic UI Updates**:
-   - Setiap aksi pemindahan tiket (*move issue*) atau perubahan prioritas langsung diperbarui di UI secara instan sebelum permintaan REST API ke server selesai, sehingga aplikasi terasa sangat responsif tanpa delay.
-
-4. **Zero-Collision Load Experience**:
-   - Penggabungan proses *data fetching* dan *splash screen* memastikan bahwa ketika animasi splash screen selesai, seluruh isi dashboard sudah dalam keadaan 100% terisi dan siap digunakan tanpa ada animasi *pop-in* yang mengganggu.
+   - Setiap aksi pemindahan tiket (*move issue*) atau perubahan prioritas langsung diperbarui di UI secara instan sebelum permintaan REST API ke server selesai.
+4. **Human-in-the-Loop AI Safety**:
+   - Setiap modifikasi data oleh AI harus melalui tinjauan dan persetujuan pengguna (*Action Plan Card*), dengan opsi pengeditan mandiri sebelum eksekusi.
