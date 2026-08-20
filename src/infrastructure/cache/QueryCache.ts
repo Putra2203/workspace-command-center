@@ -1,5 +1,5 @@
 import { prisma } from '@/infrastructure/db/client';
-import { Prisma } from '@/generated/prisma/client';
+import { Prisma } from '../../generated/prisma/client';
 
 interface MemoryEntry<V> {
   value: V;
