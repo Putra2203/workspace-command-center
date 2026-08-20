@@ -23,7 +23,8 @@ export class PlaneService {
   private cache = new QueryCache(60000); // 1 minute TTL, Supabase-backed
 
   constructor() {
-    const apiHost = (process.env.PLANE_API_HOST || process.env.PLANE_API_URL || 'https://api.plane.so').replace(/\/$/, '');
+    const rawHost = process.env.PLANE_API_HOST || process.env.PLANE_API_URL || 'https://api.plane.so';
+    const apiHost = rawHost.replace(/\/$/, '');
     const apiKey = process.env.PLANE_API_KEY || '';
     this.defaultWorkspaceSlug = process.env.PLANE_WORKSPACE_SLUG || '';
 
@@ -57,6 +58,28 @@ export class PlaneService {
     });
   }
 
+  /**
+   * Get workspace slug dynamically from process.env or auto-resolve via Plane API /workspaces/
+   */
+  async getWorkspaceSlug(): Promise<string> {
+    if (this.defaultWorkspaceSlug && this.defaultWorkspaceSlug.trim()) {
+      return this.defaultWorkspaceSlug;
+    }
+
+    try {
+      const response = await this.client.get('/workspaces/');
+      const workspaces = response.data.results || response.data;
+      if (Array.isArray(workspaces) && workspaces.length > 0 && workspaces[0].slug) {
+        this.defaultWorkspaceSlug = workspaces[0].slug;
+        return this.defaultWorkspaceSlug;
+      }
+    } catch (err) {
+      console.error('Failed to dynamically resolve workspace slug from Plane API:', err);
+    }
+
+    throw new Error('PLANE_WORKSPACE_SLUG environment variable is missing and could not be auto-resolved from Plane API.');
+  }
+
   private isUUID(str: string): boolean {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
   }
@@ -65,6 +88,10 @@ export class PlaneService {
    * Resolve project key/identifier or name to UUID
    */
   async resolveProjectId(projectId: string): Promise<string> {
+    if (!projectId || projectId.trim().toUpperCase() === 'ALL') {
+      return 'ALL';
+    }
+
     if (this.isUUID(projectId)) {
       return projectId;
     }
@@ -114,18 +141,28 @@ export class PlaneService {
   }
 
   /**
-   * Resolve issue sequence key (e.g. PROJECT1-31 or 31) or title to issue UUID
+   * Resolve issue sequence key or title and its target project UUID
    */
-  async resolveIssueId(projectId: string, issueIdOrKey: string): Promise<string> {
-    if (this.isUUID(issueIdOrKey)) {
-      return issueIdOrKey;
+  async resolveIssueInfo(projectId: string, issueIdOrKey: string): Promise<{ issueId: string; realProjectId: string }> {
+    if (this.isUUID(issueIdOrKey) && projectId !== 'ALL') {
+      return { issueId: issueIdOrKey, realProjectId: projectId };
     }
 
     const realProjectId = await this.resolveProjectId(projectId);
-    const match = issueIdOrKey.match(/^(?:[A-Z0-9]+-)?(\d+)$/i);
-    const seqNum = match ? parseInt(match[1], 10) : null;
+    const match = issueIdOrKey.match(/^(?:([A-Z0-9]+)-)?(\d+)$/i);
+    const projectCode = match ? match[1] : null;
+    const seqNum = match ? parseInt(match[2], 10) : null;
 
-    const issues = await this.listIssues(realProjectId);
+    let searchProjectId = realProjectId;
+    if (projectCode) {
+      try {
+        searchProjectId = await this.resolveProjectId(projectCode);
+      } catch {
+        // Fallback
+      }
+    }
+
+    const issues = await this.listIssues(searchProjectId);
     const found = issues.find(
       (i) =>
         i.id === issueIdOrKey ||
@@ -134,12 +171,24 @@ export class PlaneService {
     );
 
     if (found) {
-      return found.id;
+      const actualProjId = (found as any).project || (found as any).project_detail?.id || searchProjectId;
+      return {
+        issueId: found.id,
+        realProjectId: actualProjId === 'ALL' ? (searchProjectId !== 'ALL' ? searchProjectId : actualProjId) : actualProjId,
+      };
     }
 
     throw new Error(
       `Issue '${issueIdOrKey}' was not found in project '${projectId}'. Please specify a valid issue sequence key (e.g. PROJECT1-31 or 31).`
     );
+  }
+
+  /**
+   * Resolve issue sequence key (e.g. PROJECT1-31 or 31) or title to issue UUID
+   */
+  async resolveIssueId(projectId: string, issueIdOrKey: string): Promise<string> {
+    const { issueId } = await this.resolveIssueInfo(projectId, issueIdOrKey);
+    return issueId;
   }
 
   /**
@@ -200,7 +249,7 @@ export class PlaneService {
    * List projects in the default workspace
    */
   async listProjects(bypassCache = false): Promise<PlaneProject[]> {
-    const slug = this.defaultWorkspaceSlug;
+    const slug = await this.getWorkspaceSlug();
     const cacheKey = `projects_${slug}`;
     if (!bypassCache) {
       const cached = await this.cache.get<PlaneProject[]>(cacheKey);
@@ -217,8 +266,16 @@ export class PlaneService {
    * Get project details
    */
   async getProject(projectId: string): Promise<PlaneProject> {
-    const slug = this.defaultWorkspaceSlug;
+    const slug = await this.getWorkspaceSlug();
     const realProjectId = await this.resolveProjectId(projectId);
+    if (realProjectId === 'ALL') {
+      return {
+        id: 'ALL',
+        identifier: 'ALL',
+        name: 'All Projects',
+        description: 'Workspace-wide view of all projects',
+      } as any;
+    }
     const response = await this.client.get(`/workspaces/${slug}/projects/${realProjectId}/`);
     return response.data;
   }
@@ -227,8 +284,22 @@ export class PlaneService {
    * List states for a project
    */
   async listStates(projectId: string, bypassCache = false): Promise<PlaneState[]> {
-    const slug = this.defaultWorkspaceSlug;
+    const slug = await this.getWorkspaceSlug();
     const realProjectId = await this.resolveProjectId(projectId);
+    if (realProjectId === 'ALL') {
+      const projects = await this.listProjects();
+      const statesArrays = await Promise.all(projects.map(p => this.listStates(p.id, bypassCache).catch(() => [])));
+      const uniqueStates: PlaneState[] = [];
+      const seen = new Set<string>();
+      statesArrays.flat().forEach(s => {
+        const key = (s.name || '').trim().toLowerCase();
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          uniqueStates.push(s);
+        }
+      });
+      return uniqueStates;
+    }
     const cacheKey = `states_${slug}_${realProjectId}`;
     if (!bypassCache) {
       const cached = await this.cache.get<PlaneState[]>(cacheKey);
@@ -245,8 +316,23 @@ export class PlaneService {
    * List members for a project
    */
   async listMembers(projectId: string): Promise<PlaneMember[]> {
-    const slug = this.defaultWorkspaceSlug;
+    const slug = await this.getWorkspaceSlug();
     const realProjectId = await this.resolveProjectId(projectId);
+    if (realProjectId === 'ALL') {
+      const projects = await this.listProjects();
+      const membersArrays = await Promise.all(projects.map(p => this.listMembers(p.id).catch(() => [])));
+      const uniqueMembers: PlaneMember[] = [];
+      const seen = new Set<string>();
+      membersArrays.flat().forEach(m => {
+        if (!m) return;
+        const key = m.id || (m as any).email || ((m as any).member ? (m as any).member.id : '');
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          uniqueMembers.push(m);
+        }
+      });
+      return uniqueMembers;
+    }
     const cacheKey = `members_${slug}_${realProjectId}`;
     const cached = await this.cache.get<PlaneMember[]>(cacheKey);
     if (cached) return cached;
@@ -261,9 +347,14 @@ export class PlaneService {
    * List issues for a project (with optional filters)
    */
   async listIssues(projectId: string, params?: Record<string, any>): Promise<PlaneIssue[]> {
-    const slug = this.defaultWorkspaceSlug;
+    const slug = await this.getWorkspaceSlug();
     const realProjectId = await this.resolveProjectId(projectId);
-    
+    if (realProjectId === 'ALL') {
+      const projects = await this.listProjects();
+      const issuesArrays = await Promise.all(projects.map(p => this.listIssues(p.id, params).catch(() => [])));
+      return issuesArrays.flat();
+    }
+
     // Clean params object
     const queryParams: Record<string, any> = {
       order_by: '-created_at',
@@ -286,10 +377,10 @@ export class PlaneService {
    * Get issue details
    */
   async getIssue(projectId: string, issueId: string): Promise<PlaneIssue> {
-    const slug = this.defaultWorkspaceSlug;
-    const realProjectId = await this.resolveProjectId(projectId);
-    const realIssueId = await this.resolveIssueId(realProjectId, issueId);
-    const response = await this.client.get(`/workspaces/${slug}/projects/${realProjectId}/issues/${realIssueId}/`);
+    const slug = await this.getWorkspaceSlug();
+    const { issueId: realIssueId, realProjectId } = await this.resolveIssueInfo(projectId, issueId);
+    const targetProj = realProjectId === 'ALL' ? (await this.listProjects())[0]?.id : realProjectId;
+    const response = await this.client.get(`/workspaces/${slug}/projects/${targetProj}/issues/${realIssueId}/`);
     return response.data;
   }
 
@@ -297,8 +388,13 @@ export class PlaneService {
    * Create an issue
    */
   async createIssue(projectId: string, data: Record<string, any>): Promise<PlaneIssue> {
-    const slug = this.defaultWorkspaceSlug;
-    const realProjectId = await this.resolveProjectId(projectId);
+    const slug = await this.getWorkspaceSlug();
+    let realProjectId = await this.resolveProjectId(projectId);
+    if (realProjectId === 'ALL') {
+      const projects = await this.listProjects();
+      if (projects.length === 0) throw new Error('No available projects in this workspace to create issue.');
+      realProjectId = projects[0].id;
+    }
 
     // Resolve state name to state UUID if provided
     if (data.state && typeof data.state === 'string' && !this.isUUID(data.state)) {
@@ -314,17 +410,17 @@ export class PlaneService {
    * Update an issue
    */
   async updateIssue(projectId: string, issueId: string, data: Record<string, any>): Promise<PlaneIssue> {
-    const slug = this.defaultWorkspaceSlug;
-    const realProjectId = await this.resolveProjectId(projectId);
-    const realIssueId = await this.resolveIssueId(realProjectId, issueId);
+    const slug = await this.getWorkspaceSlug();
+    const { issueId: realIssueId, realProjectId } = await this.resolveIssueInfo(projectId, issueId);
+    const targetProj = realProjectId === 'ALL' ? (await this.listProjects())[0]?.id : realProjectId;
 
     // Resolve state name to state UUID if provided
     if (data.state && typeof data.state === 'string' && !this.isUUID(data.state)) {
-      data.state = await this.resolveStateId(realProjectId, data.state);
+      data.state = await this.resolveStateId(targetProj, data.state);
     }
 
-    const response = await this.client.patch(`/workspaces/${slug}/projects/${realProjectId}/issues/${realIssueId}/`, data);
-    await this.cache.deletePrefix(`issues_${slug}_${realProjectId}`);
+    const response = await this.client.patch(`/workspaces/${slug}/projects/${targetProj}/issues/${realIssueId}/`, data);
+    await this.cache.deletePrefix(`issues_${slug}_${targetProj}`);
     return response.data;
   }
 
@@ -332,11 +428,11 @@ export class PlaneService {
    * Delete an issue
    */
   async deleteIssue(projectId: string, issueId: string): Promise<{ success: boolean }> {
-    const slug = this.defaultWorkspaceSlug;
-    const realProjectId = await this.resolveProjectId(projectId);
-    const realIssueId = await this.resolveIssueId(realProjectId, issueId);
-    await this.client.delete(`/workspaces/${slug}/projects/${realProjectId}/issues/${realIssueId}/`);
-    await this.cache.deletePrefix(`issues_${slug}_${realProjectId}`);
+    const slug = await this.getWorkspaceSlug();
+    const { issueId: realIssueId, realProjectId } = await this.resolveIssueInfo(projectId, issueId);
+    const targetProj = realProjectId === 'ALL' ? (await this.listProjects())[0]?.id : realProjectId;
+    await this.client.delete(`/workspaces/${slug}/projects/${targetProj}/issues/${realIssueId}/`);
+    await this.cache.deletePrefix(`issues_${slug}_${targetProj}`);
     return { success: true };
   }
 
@@ -344,7 +440,7 @@ export class PlaneService {
    * List labels for a project
    */
   async listLabels(projectId: string): Promise<PlaneLabel[]> {
-    const slug = this.defaultWorkspaceSlug;
+    const slug = await this.getWorkspaceSlug();
     const realProjectId = await this.resolveProjectId(projectId);
     const cacheKey = `labels_${slug}_${realProjectId}`;
     const cached = await this.cache.get<PlaneLabel[]>(cacheKey);
@@ -360,7 +456,7 @@ export class PlaneService {
    * List comments for an issue
    */
   async listComments(projectId: string, issueId: string): Promise<PlaneIssueComment[]> {
-    const slug = this.defaultWorkspaceSlug;
+    const slug = await this.getWorkspaceSlug();
     const realProjectId = await this.resolveProjectId(projectId);
     const realIssueId = await this.resolveIssueId(realProjectId, issueId);
     const response = await this.client.get(`/workspaces/${slug}/projects/${realProjectId}/issues/${realIssueId}/comments/`);
@@ -371,7 +467,7 @@ export class PlaneService {
    * Add a comment to an issue
    */
   async addComment(projectId: string, issueId: string, comment_html: string): Promise<PlaneIssueComment> {
-    const slug = this.defaultWorkspaceSlug;
+    const slug = await this.getWorkspaceSlug();
     const realProjectId = await this.resolveProjectId(projectId);
     const realIssueId = await this.resolveIssueId(realProjectId, issueId);
     const response = await this.client.post(`/workspaces/${slug}/projects/${realProjectId}/issues/${realIssueId}/comments/`, {
@@ -384,7 +480,7 @@ export class PlaneService {
    * List cycles for a project
    */
   async listCycles(projectId: string): Promise<PlaneCycle[]> {
-    const slug = this.defaultWorkspaceSlug;
+    const slug = await this.getWorkspaceSlug();
     const realProjectId = await this.resolveProjectId(projectId);
     const cacheKey = `cycles_${slug}_${realProjectId}`;
     const cached = await this.cache.get<PlaneCycle[]>(cacheKey);
@@ -401,7 +497,7 @@ export class PlaneService {
    */
   async listCycleIssues(projectId: string, cycleId: string): Promise<PlaneIssue[]> {
     try {
-      const slug = this.defaultWorkspaceSlug;
+      const slug = await this.getWorkspaceSlug();
       const realProjectId = await this.resolveProjectId(projectId);
       
       // Try primary official cycle-issues endpoint
@@ -446,7 +542,7 @@ export class PlaneService {
    * List modules for a project
    */
   async listModules(projectId: string): Promise<PlaneModule[]> {
-    const slug = this.defaultWorkspaceSlug;
+    const slug = await this.getWorkspaceSlug();
     const realProjectId = await this.resolveProjectId(projectId);
     const cacheKey = `modules_${slug}_${realProjectId}`;
     const cached = await this.cache.get<PlaneModule[]>(cacheKey);

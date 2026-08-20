@@ -40,8 +40,8 @@ export async function executeIntent(
         // Resolve project human-readable identifier (e.g. a Plane project's short code)
         const projects = await planeService.listProjects().catch(() => []);
         const foundProj = projects.find(p => p.id === realProjectId || p.identifier?.toLowerCase() === intent.entities.projectKey?.toLowerCase());
-        const displayKey = foundProj?.identifier || 'PROJECT';
-        const displayProjectName = foundProj?.name || displayKey;
+        const displayKey = realProjectId === 'ALL' ? 'ALL' : (foundProj?.identifier || 'PROJECT');
+        const displayProjectName = realProjectId === 'ALL' ? 'All Projects' : (foundProj?.name || displayKey);
 
         // Fetch states for this project to resolve state UUID -> state Name (e.g. Done, In Progress, Backlog)
         const states = await planeService.listStates(realProjectId).catch(() => []);
@@ -66,6 +66,9 @@ export async function executeIntent(
           });
         }
         
+        const projectMap = new Map<string, string>();
+        projects.forEach(p => { if (p.id && p.identifier) projectMap.set(p.id, p.identifier); });
+
         cards.push({
           type: 'issue_list',
           title: `${displayProjectName} (${displayKey}) - ${issues.length} Tasks ${options?.userScope === 'my_tasks' ? '(Mine)' : ''}`,
@@ -75,10 +78,11 @@ export async function executeIntent(
               const stateInfo = stateMap.get(stateId) || { name: i.state_detail?.name || 'Open', color: '#3B82F6' };
               const assigneeId = i.assignees && i.assignees.length > 0 ? i.assignees[0] : '';
               const assigneeName = memberMap.get(assigneeId) || (assigneeId ? 'Assigned' : 'Unassigned');
+              const itemProjKey = (i as any).project_detail?.identifier || projectMap.get((i as any).project) || displayKey;
 
               return {
                 id: i.id,
-                key: `${displayKey}-${i.sequence_id}`,
+                key: `${itemProjKey}-${i.sequence_id}`,
                 title: i.name || 'Untitled Task',
                 state: stateInfo.name,
                 stateColor: stateInfo.color,

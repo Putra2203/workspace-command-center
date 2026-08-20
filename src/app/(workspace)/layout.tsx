@@ -65,7 +65,7 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
       <Sidebar projects={projects} />
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden pb-16 md:pb-0">
         {/* Top Header Bar */}
         <header className="h-14 border-b border-white/5 flex items-center justify-between px-3 sm:px-4 bg-[#09090B] shrink-0 gap-2 relative z-30">
           <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 shrink-0">

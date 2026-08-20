@@ -24,36 +24,48 @@ export class QueryCache {
     }
     this.memory.delete(key);
 
-    const row = await prisma.queryCache.findUnique({ where: { key } });
-    if (!row || row.expiresAt.getTime() <= Date.now()) {
+    try {
+      const row = await prisma.queryCache.findUnique({ where: { key } });
+      if (!row || row.expiresAt.getTime() <= Date.now()) {
+        return undefined;
+      }
+
+      const value = row.value as V;
+      this.memory.set(key, { value, expiry: row.expiresAt.getTime() });
+      return value;
+    } catch (err) {
       return undefined;
     }
-
-    const value = row.value as V;
-    this.memory.set(key, { value, expiry: row.expiresAt.getTime() });
-    return value;
   }
 
   async set<V>(key: string, value: V): Promise<void> {
     const expiry = Date.now() + this.ttlMs;
     this.memory.set(key, { value, expiry });
 
-    await prisma.queryCache.upsert({
-      where: { key },
-      create: { key, value: value as Prisma.InputJsonValue, expiresAt: new Date(expiry) },
-      update: { value: value as Prisma.InputJsonValue, expiresAt: new Date(expiry) },
-    });
+    try {
+      await prisma.queryCache.upsert({
+        where: { key },
+        create: { key, value: value as Prisma.InputJsonValue, expiresAt: new Date(expiry) },
+        update: { value: value as Prisma.InputJsonValue, expiresAt: new Date(expiry) },
+      });
+    } catch (err) {
+      // Ignore DB cache persistence failure
+    }
   }
 
   async delete(key: string): Promise<void> {
     this.memory.delete(key);
-    await prisma.queryCache.deleteMany({ where: { key } });
+    try {
+      await prisma.queryCache.deleteMany({ where: { key } });
+    } catch {}
   }
 
   async deletePrefix(prefix: string): Promise<void> {
     for (const key of this.memory.keys()) {
       if (key.startsWith(prefix)) this.memory.delete(key);
     }
-    await prisma.queryCache.deleteMany({ where: { key: { startsWith: prefix } } });
+    try {
+      await prisma.queryCache.deleteMany({ where: { key: { startsWith: prefix } } });
+    } catch {}
   }
 }
