@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { message, projectId, userScope } = body;
+    const { message, projectId, userScope, image } = body;
 
     if (!message || typeof message !== 'string') {
       return Response.json({ error: 'Valid message string is required' }, { status: 400 });
@@ -30,10 +30,48 @@ export async function POST(request: NextRequest) {
 
     const cleanMessage = scrubPII(message);
 
-    const intentResult = await parseIntentAsync(cleanMessage, {
+    // Multi-modal vision: if image is attached, analyze it with Gemini Vision
+    let visionContext = '';
+    if (image?.base64Data && image?.mimeType) {
+      try {
+        const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+        if (apiKey) {
+          const { GoogleGenAI } = await import('@google/genai');
+          const ai = new GoogleGenAI({ apiKey });
+          const visionResult = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [
+              {
+                inlineData: {
+                  mimeType: image.mimeType,
+                  data: image.base64Data,
+                },
+              },
+              `Analyze this screenshot/image for project management purposes.
+Extract: bug title (if it's a bug), detailed description or reproduction steps, suggested priority (urgent/high/medium/low), and suggested labels.
+If it's a design mockup, describe the UI elements and suggest a feature task title.
+Respond in JSON format: { "title": "...", "description": "...", "priority": "...", "labels": ["..."], "type": "bug|feature|task" }`,
+            ],
+          });
+          const visionText = typeof (visionResult as any).text === 'function'
+            ? (visionResult as any).text()
+            : (visionResult as any).text;
+          if (visionText) {
+            visionContext = `\n[Vision Analysis]: ${visionText}`;
+          }
+        }
+      } catch (visionErr) {
+        console.warn('Vision analysis failed, continuing with text-only:', visionErr);
+      }
+    }
+
+    const enrichedMessage = cleanMessage + visionContext;
+
+    const intentResult = await parseIntentAsync(enrichedMessage, {
       activeProjectId: projectId,
       activeProjectKey: projectId,
     });
+
 
     if (!intentResult.entities.projectKey && projectId) {
       intentResult.entities.projectKey = projectId;

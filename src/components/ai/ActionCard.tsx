@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { motion } from 'motion/react';
-import { CheckCircle2, Info, AlertCircle, ListTodo, FileText, ShieldAlert, Play, X, Loader2 } from 'lucide-react';
+import { CheckCircle2, Info, AlertCircle, ListTodo, FileText, ShieldAlert, Play, X, Loader2, Pencil } from 'lucide-react';
 import { ActionPlan } from '@/types/ai';
+import { ActionPlanSchema } from '@/types/schemas';
 
 interface ActionCardProps {
   data: {
@@ -25,11 +26,38 @@ interface ActionPlanCardProps {
 export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProps) {
   const [isExecuting, setIsExecuting] = useState(false);
   const [isCancelled, setIsCancelled] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedPlan, setEditedPlan] = useState<ActionPlan>(plan);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const handleStepChange = useCallback((index: number, field: string, value: string) => {
+    setEditedPlan((prev) => {
+      const newSteps = [...prev.steps];
+      if (field.startsWith('changes.')) {
+        const changeKey = field.replace('changes.', '');
+        newSteps[index] = {
+          ...newSteps[index],
+          changes: { ...newSteps[index].changes, [changeKey]: value },
+        };
+      } else {
+        newSteps[index] = { ...newSteps[index], [field]: value };
+      }
+      return { ...prev, steps: newSteps };
+    });
+    setValidationError(null);
+  }, []);
 
   const handleApprove = async () => {
+    const activePlan = isEditing ? editedPlan : plan;
+    const result = ActionPlanSchema.safeParse(activePlan);
+    if (!result.success) {
+      setValidationError('Format plan tidak valid. Periksa kembali input Anda.');
+      return;
+    }
     setIsExecuting(true);
+    setValidationError(null);
     try {
-      await onApprove(plan);
+      await onApprove(result.data as ActionPlan);
     } finally {
       setIsExecuting(false);
     }
@@ -56,6 +84,8 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
     }
   };
 
+  const activePlan = isEditing ? editedPlan : plan;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -68,32 +98,68 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
           <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
           <div>
             <div className="text-xs font-mono uppercase tracking-wider text-amber-400 font-semibold">
-              Persetujuan Tindakan {plan.risk && `(${plan.risk} risk)`}
+              Persetujuan Tindakan {activePlan.risk && `(${activePlan.risk} risk)`}
             </div>
-            <div className="text-sm font-semibold text-[#FAFAFA] mt-0.5">{plan.summary}</div>
+            <div className="text-sm font-semibold text-[#FAFAFA] mt-0.5">{activePlan.summary}</div>
           </div>
         </div>
-        <span className={`text-[10px] px-2 py-0.5 rounded border uppercase font-mono font-semibold ${getRiskBadgeClass(plan.risk)}`}>
-          {plan.risk} risk
-        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setIsEditing(!isEditing); setValidationError(null); }}
+            disabled={isExecuting}
+            className={`text-[10px] px-2 py-0.5 rounded border font-mono font-semibold flex items-center gap-1 transition-colors ${
+              isEditing
+                ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                : 'bg-[#18181B] border-white/10 text-[#71717A] hover:text-[#FAFAFA]'
+            }`}
+          >
+            <Pencil className="w-3 h-3" />
+            {isEditing ? 'Editing' : 'Edit'}
+          </button>
+          <span className={`text-[10px] px-2 py-0.5 rounded border uppercase font-mono font-semibold ${getRiskBadgeClass(activePlan.risk)}`}>
+            {activePlan.risk} risk
+          </span>
+        </div>
       </div>
 
       {/* Steps List */}
       <div className="space-y-2">
-        <div className="text-[11px] font-mono text-[#A1A1AA] uppercase">Langkah Perubahan ({plan.steps.length}):</div>
-        {plan.steps.map((step, idx) => (
-          <div key={idx} className="p-2.5 rounded-lg bg-[#18181B] border border-white/10 text-xs space-y-1.5">
+        <div className="text-[11px] font-mono text-[#A1A1AA] uppercase">Langkah Perubahan ({activePlan.steps.length}):</div>
+        {activePlan.steps.map((step, idx) => (
+          <div key={idx} className={`p-2.5 rounded-lg bg-[#18181B] border text-xs space-y-1.5 ${
+            isEditing ? 'border-blue-500/20' : 'border-white/10'
+          }`}>
             <div className="flex items-center justify-between font-mono">
               <span className="text-blue-400 font-semibold">{step.operation}</span>
-              <span className="text-[#A1A1AA] bg-[#111113] px-2 py-0.5 rounded border border-white/5">{step.target}</span>
+              {isEditing ? (
+                <input
+                  type="text"
+                  value={step.target}
+                  onChange={(e) => handleStepChange(idx, 'target', e.target.value)}
+                  className="text-[#FAFAFA] bg-[#111113] px-2 py-0.5 rounded border border-blue-500/30 outline-none focus:border-blue-500 text-xs font-mono w-32"
+                />
+              ) : (
+                <span className="text-[#A1A1AA] bg-[#111113] px-2 py-0.5 rounded border border-white/5">{step.target}</span>
+              )}
             </div>
 
             {step.changes && Object.keys(step.changes).length > 0 && (
               <div className="grid grid-cols-2 gap-1.5 pt-1 text-[11px]">
                 {Object.entries(step.changes).map(([k, v]) => (
-                  <div key={k} className="bg-[#111113] p-1.5 rounded border border-white/5">
+                  <div key={k} className={`p-1.5 rounded border ${
+                    isEditing ? 'bg-[#111113] border-blue-500/20' : 'bg-[#111113] border-white/5'
+                  }`}>
                     <span className="text-[#71717A] block font-mono text-[10px]">{k}</span>
-                    <span className="text-[#FAFAFA] font-medium truncate block">{String(v)}</span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={String(v)}
+                        onChange={(e) => handleStepChange(idx, `changes.${k}`, e.target.value)}
+                        className="text-[#FAFAFA] font-medium w-full bg-transparent outline-none border-b border-blue-500/30 focus:border-blue-500 text-xs"
+                      />
+                    ) : (
+                      <span className="text-[#FAFAFA] font-medium truncate block">{String(v)}</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -101,6 +167,13 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
           </div>
         ))}
       </div>
+
+      {/* Validation Error */}
+      {validationError && (
+        <div className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-1.5">
+          ⚠️ {validationError}
+        </div>
+      )}
 
       {/* Action Buttons */}
       <div className="flex items-center justify-end gap-2 pt-2 border-t border-amber-500/20">
@@ -126,7 +199,7 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
           ) : (
             <>
               <Play className="w-3.5 h-3.5 fill-current" />
-              <span>Setujui & Eksekusi</span>
+              <span>{isEditing ? 'Simpan & Eksekusi' : 'Setujui & Eksekusi'}</span>
             </>
           )}
         </button>
@@ -134,6 +207,7 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
     </motion.div>
   );
 }
+
 
 export function ActionCard({ data }: ActionCardProps) {
   const title = data.title || data.data?.title;

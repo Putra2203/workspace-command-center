@@ -66,3 +66,30 @@ model AiUsage {
 
   @@map("ai_usage")
 }
+
+model ChatSession {
+  id        String        @id @default(uuid())
+  title     String        @default("New Conversation")
+  projectId String?       @map("project_id")
+  userId    String?       @map("user_id")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  messages  ChatMessage[]
+
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id          String      @id @default(uuid())
+  sessionId   String      @map("session_id")
+  session     ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role        String      // 'user' | 'assistant'
+  content     String      @db.Text
+  actionCards Json?       @map("action_cards")
+  plan        Json?
+  imageUrl    String?     @map("image_url")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  @@index([sessionId])
+  @@map("chat_messages")
+}
