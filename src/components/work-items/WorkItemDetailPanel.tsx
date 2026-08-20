@@ -275,8 +275,23 @@ export function WorkItemDetailPanel({
     }
   };
 
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 768px)');
+    setIsDesktop(mediaQuery.matches);
+
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true">
+    <div
+      className={`fixed inset-0 z-50 flex ${isDesktop ? 'justify-end' : 'flex-col justify-end'}`}
+      role="dialog"
+      aria-modal="true"
+    >
       {/* Backdrop */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -287,26 +302,40 @@ export function WorkItemDetailPanel({
         onClick={onClose}
       />
 
-      {/* Bottom Sheet Card */}
+      {/* Responsive Panel: Side Drawer on Desktop, Bottom Sheet on Mobile */}
       <motion.div
-        initial={{ y: '100%', opacity: 0.5 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: '100%', opacity: 0 }}
-        transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-        drag="y"
+        initial={isDesktop ? { x: '100%', opacity: 0.6 } : { y: '100%', opacity: 0.5 }}
+        animate={isDesktop ? { x: 0, opacity: 1 } : { y: 0, opacity: 1 }}
+        exit={isDesktop ? { x: '100%', opacity: 0 } : { y: '100%', opacity: 0 }}
+        transition={
+          isDesktop
+            ? { type: 'spring', damping: 30, stiffness: 320 }
+            : { type: 'spring', damping: 28, stiffness: 300 }
+        }
+        drag={isDesktop ? false : 'y'}
         dragConstraints={{ top: 0, bottom: 0 }}
         dragElastic={{ top: 0, bottom: 0.5 }}
         onDragEnd={(_, info) => {
-          if (info.offset.y > 100 || info.velocity.y > 400) {
+          if (!isDesktop && (info.offset.y > 100 || info.velocity.y > 400)) {
             onClose();
           }
         }}
-        className="relative w-full max-w-4xl mx-auto h-[85vh] max-h-[85vh] bg-[#0B0B0D] border-t border-x border-white/10 rounded-t-2xl shadow-2xl flex flex-col overflow-hidden"
+        className={
+          isDesktop
+            ? 'relative w-full max-w-xl lg:max-w-2xl h-full bg-[#0B0B0D] border-l border-white/10 shadow-2xl flex flex-col overflow-hidden z-10'
+            : 'relative w-full max-w-4xl mx-auto h-[88vh] max-h-[88vh] bg-[#0B0B0D] border-t border-x border-white/10 rounded-t-2xl shadow-2xl flex flex-col overflow-hidden z-10'
+        }
       >
-        {/* Sticky Header with Drag Handle */}
-        <div className="px-5 pt-2.5 pb-3 border-b border-white/10 bg-[#0B0B0D] shrink-0 space-y-2">
-          {/* Drag Handle Indicator */}
-          <div className="w-12 h-1 rounded-full bg-white/20 mx-auto cursor-grab active:cursor-grabbing hover:bg-white/40 transition-colors" onClick={onClose} title="Close sheet" />
+        {/* Sticky Header */}
+        <div className="px-5 pt-3 pb-3 border-b border-white/10 bg-[#0B0B0D] shrink-0 space-y-2">
+          {/* Mobile Drag Handle Indicator */}
+          {!isDesktop && (
+            <div
+              className="w-12 h-1 rounded-full bg-white/20 mx-auto cursor-grab active:cursor-grabbing hover:bg-white/40 transition-colors"
+              onClick={onClose}
+              title="Close sheet"
+            />
+          )}
 
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
