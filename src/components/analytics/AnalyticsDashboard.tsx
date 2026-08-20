@@ -13,7 +13,9 @@ import {
   Zap,
   PieChart as PieIcon,
   Activity,
-  Layers
+  Layers,
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -34,8 +36,11 @@ import { PlaneIssue } from '@/types/plane';
 import { PlaneStateLike } from '@/domain/work_items/my-day';
 import { Project } from '@/lib/context/workspace-data';
 import { calculateProjectHealth } from '@/domain/analytics/analytics-helper';
+import { StatusIndicator } from '@/components/ui/StatusIndicator';
+import { TechnicalLabel } from '@/components/ui/TechnicalLabel';
 
 interface AnalyticsDashboardProps {
+  activeProjectId?: string | null;
   activeProjectKey: string | null;
   projects?: Project[];
   issues: PlaneIssue[];
@@ -46,32 +51,36 @@ const PRIORITY_COLORS: Record<string, string> = {
   urgent: '#f43f5e', // rose-500
   high: '#f97316',   // orange-500
   medium: '#f59e0b', // amber-500
-  low: '#3b82f6',    // blue-500
+  low: '#38bdf8',    // cyan-400
   none: '#71717a',   // zinc-500
 };
 
 const STATE_COLORS: Record<string, string> = {
-  Completed: '#10b981',  // emerald-500
-  'In Progress': '#3b82f6', // blue-500
-  Unstarted: '#f59e0b',  // amber-500
-  Backlog: '#71717a',    // zinc-500
+  Completed: '#10b981',   // emerald-500
+  'In Progress': '#38bdf8', // cyan-400
+  Unstarted: '#f59e0b',   // amber-500
+  Backlog: '#71717a',     // zinc-500
 };
 
-// Sleek Custom Tooltip for Recharts
+// Sleek Custom Tooltip for Mission Control Recharts
 function CustomChartTooltip({ active, payload, label }: any) {
   if (active && payload && payload.length) {
     return (
-      <div className="p-3 rounded-xl bg-[#111113]/95 border border-white/10 shadow-2xl backdrop-blur-md text-xs space-y-1 z-50">
-        <div className="font-semibold text-[#FAFAFA] border-b border-white/10 pb-1 font-mono">{label}</div>
-        {payload.map((entry: any, index: number) => (
-          <div key={`item-${index}`} className="flex items-center justify-between gap-4">
-            <span className="flex items-center gap-1.5 text-[#A1A1AA]">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
-              {entry.name}:
-            </span>
-            <span className="font-mono font-bold text-[#FAFAFA]">{entry.value}</span>
-          </div>
-        ))}
+      <div className="p-3 rounded-xl bg-[#0B0F14]/95 border border-white/[0.12] shadow-2xl backdrop-blur-md text-xs space-y-1.5 font-mono z-50">
+        <div className="text-[10px] text-[#71717A] uppercase tracking-wider border-b border-white/[0.08] pb-1">
+          {label ? `DATA POINT: ${label}` : 'METRIC TELEMETRY'}
+        </div>
+        <div className="space-y-1">
+          {payload.map((entry: any, index: number) => (
+            <div key={`item-${index}`} className="flex items-center justify-between gap-4 text-[11px]">
+              <span className="flex items-center gap-1.5 text-[#A1A1AA]">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color || entry.fill }} />
+                {entry.name}:
+              </span>
+              <span className="font-bold text-[#FAFAFA]">{entry.value}</span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -79,6 +88,7 @@ function CustomChartTooltip({ active, payload, label }: any) {
 }
 
 export function AnalyticsDashboard({
+  activeProjectId,
   activeProjectKey,
   projects = [],
   issues,
@@ -86,16 +96,30 @@ export function AnalyticsDashboard({
 }: AnalyticsDashboardProps) {
   const [timeRange, setTimeRange] = useState<'7d' | '30d'>('7d');
 
-  // Filter issues based on activeProjectKey
+  // Filter issues based on activeProjectId & activeProjectKey
   const filteredIssues = useMemo(() => {
-    if (!activeProjectKey || activeProjectKey === 'ALL') return issues;
-    return issues.filter(
-      (i) =>
-        i.project_detail?.identifier === activeProjectKey ||
-        i.project === activeProjectKey ||
-        (i as any).project_id === activeProjectKey
+    if (!activeProjectKey || activeProjectKey === 'ALL' || !activeProjectId || activeProjectId === 'ALL') {
+      return issues;
+    }
+    const currentProj = projects.find(
+      (p) => p.id === activeProjectId || p.identifier === activeProjectKey
     );
-  }, [issues, activeProjectKey]);
+    const targetId = currentProj?.id || activeProjectId;
+    const targetKey = currentProj?.identifier || activeProjectKey;
+
+    const matched = issues.filter(
+      (i) =>
+        i.project === targetId ||
+        i.project === targetKey ||
+        (i as any).project_id === targetId ||
+        (i as any).project_id === targetKey ||
+        i.project_detail?.identifier === targetKey ||
+        (i as any).project_detail?.id === targetId
+    );
+
+    // If context already contains issues for this active project, return issues directly
+    return matched.length > 0 ? matched : issues;
+  }, [issues, activeProjectId, activeProjectKey, projects]);
 
   const metrics = useMemo(
     () => calculateProjectHealth(filteredIssues, states),
@@ -124,7 +148,7 @@ export function AnalyticsDashboard({
     ];
   }, [metrics]);
 
-  // 3. Historical / Throughput Trend Curve (Dynamic bucketing from issue timestamps)
+  // 3. Historical / Throughput Trend Curve
   const throughputTrendData = useMemo(() => {
     const days = timeRange === '7d' ? 7 : 30;
     const result: { date: string; created: number; completed: number }[] = [];
@@ -201,101 +225,112 @@ export function AnalyticsDashboard({
   }, [activeProjectKey, projects, issues, states]);
 
   return (
-    <div className="p-4 sm:p-6 overflow-y-auto h-full scrollbar-thin space-y-6 pb-20 md:pb-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base sm:text-lg font-bold text-[#FAFAFA] tracking-tight">
-              Project Health & Velocity
-            </h2>
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-mono font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-              Live Metrics
-            </span>
-          </div>
-          <p className="text-xs text-[#71717A] mt-0.5">
-            Throughput & health metrics for{' '}
-            <span className="font-mono text-blue-400 font-semibold">
-              {activeProjectKey === 'ALL' ? 'All Workspace Projects' : activeProjectKey || 'Active Project'}
-            </span>
-          </p>
-        </div>
-
-        {/* Health Score Pill / Banner */}
-        <div className="flex items-center justify-between sm:justify-start gap-3 bg-[#111113] border border-white/10 px-3.5 py-2 rounded-xl sm:rounded-2xl shadow-sm shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div
-              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ${
-                metrics.healthStatus === 'Healthy'
-                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                  : metrics.healthStatus === 'At Risk'
-                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-              }`}
-            >
-              <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
+    <div className="p-4 sm:p-6 overflow-y-auto h-full scrollbar-thin space-y-4 bg-[#05070A] pb-20 md:pb-6">
+      {/* Top Header Banner Card */}
+      <div className="bg-[#0B0F14] border border-white/[0.06] p-3.5 sm:p-4 rounded-xl space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-2.5 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0 mt-0.5 shadow-[0_0_20px_rgba(56,189,248,0.15)]">
+              <Activity className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <div className="text-[10px] uppercase font-mono text-[#71717A] leading-none">Health Score</div>
-              <div
-                className={`text-xs sm:text-sm font-bold font-mono mt-1 ${
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <h2 className="text-xs sm:text-sm font-bold font-mono uppercase tracking-wider text-[#FAFAFA]">
+                  Project Health & Velocity
+                </h2>
+                <StatusIndicator status="online" label="TELEMETRY LIVE" />
+              </div>
+              <p className="text-[10px] sm:text-[11px] text-[#71717A] font-mono mt-0.5 leading-snug">
+                Operational velocity & health for{' '}
+                <span className="text-cyan-400 font-semibold">
+                  {activeProjectKey === 'ALL' ? 'All Workspace Projects' : activeProjectKey || 'Active Mission'}
+                </span>
+              </p>
+            </div>
+          </div>
+
+          {/* Health Score Pill */}
+          <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-[#10151C] border border-white/[0.08] shrink-0 self-start sm:self-auto">
+            <ShieldCheck
+              className={`w-4 h-4 ${
+                metrics.healthStatus === 'Healthy'
+                  ? 'text-emerald-400'
+                  : metrics.healthStatus === 'At Risk'
+                  ? 'text-amber-400'
+                  : 'text-rose-400'
+              }`}
+            />
+            <div className="text-[11px] font-mono font-bold">
+              <span className="text-[#71717A]">HEALTH: </span>
+              <span
+                className={
                   metrics.healthStatus === 'Healthy'
                     ? 'text-emerald-400'
                     : metrics.healthStatus === 'At Risk'
                     ? 'text-amber-400'
                     : 'text-rose-400'
-                }`}
+                }
               >
-                {metrics.healthScore}% · {metrics.healthStatus}
-              </div>
+                {metrics.healthScore}% ({metrics.healthStatus})
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Top Metric Cards Grid: Compact 2x2 on mobile, 4 in a row on desktop */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      {/* Top 4 KPI Metrics Strip (Compact 2x2 on mobile, 4 on desktop) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
         {/* Completion Rate */}
-        <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-[#111113] border border-white/5 space-y-1.5 sm:space-y-2">
-          <div className="flex items-center justify-between text-[11px] sm:text-xs text-[#71717A]">
-            <span className="truncate">Completion Rate</span>
-            <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
+        <div className="p-3 sm:p-3.5 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-1.5">
+          <div className="flex items-center justify-between text-[9px] uppercase font-mono tracking-[0.14em] text-[#71717A]">
+            <span className="truncate">COMPLETION</span>
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
           </div>
-          <div className="flex items-baseline gap-1.5 sm:gap-2">
-            <span className="text-xl sm:text-2xl font-bold font-mono text-[#FAFAFA]">{metrics.completionRate}%</span>
-            <span className="text-[10px] sm:text-xs text-[#71717A] font-mono truncate">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-xl sm:text-2xl font-bold font-mono text-[#FAFAFA]">
+              {metrics.completionRate}%
+            </span>
+            <span className="text-[10px] text-[#71717A] font-mono truncate">
               ({metrics.completedIssues}/{metrics.totalIssues})
             </span>
           </div>
-          <div className="w-full bg-[#18181B] h-1.5 rounded-full overflow-hidden">
+          <div className="w-full bg-[#10151C] h-1.5 rounded-full overflow-hidden">
             <div
-              className="bg-emerald-500 h-full transition-all duration-500"
+              className="bg-emerald-400 h-full transition-all duration-500 shadow-[0_0_8px_rgba(52,211,153,0.4)]"
               style={{ width: `${metrics.completionRate}%` }}
             />
           </div>
         </div>
 
-        {/* Active In Progress */}
-        <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-[#111113] border border-white/5 space-y-1.5 sm:space-y-2">
-          <div className="flex items-center justify-between text-[11px] sm:text-xs text-[#71717A]">
-            <span className="truncate">In Progress</span>
-            <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 shrink-0" />
+        {/* In Progress */}
+        <div className="p-3 sm:p-3.5 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-1.5">
+          <div className="flex items-center justify-between text-[9px] uppercase font-mono tracking-[0.14em] text-[#71717A]">
+            <span className="truncate">IN PROGRESS</span>
+            <TrendingUp className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
           </div>
-          <div className="flex items-baseline gap-1.5 sm:gap-2">
-            <span className="text-xl sm:text-2xl font-bold font-mono text-blue-400">{metrics.inProgressIssues}</span>
-            <span className="text-[10px] sm:text-xs text-[#71717A]">tasks</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-xl sm:text-2xl font-bold font-mono text-cyan-400">
+              {metrics.inProgressIssues}
+            </span>
+            <span className="text-[10px] text-[#71717A] font-mono">active tasks</span>
           </div>
-          <p className="text-[10px] sm:text-[11px] text-[#71717A] truncate hidden sm:block">Currently being executed</p>
+          <div className="w-full bg-[#10151C] h-1.5 rounded-full overflow-hidden">
+            <div
+              className="bg-cyan-400 h-full transition-all duration-500 shadow-[0_0_8px_rgba(56,189,248,0.4)]"
+              style={{
+                width: `${Math.min(100, (metrics.inProgressIssues / (metrics.totalIssues || 1)) * 100)}%`,
+              }}
+            />
+          </div>
         </div>
 
-        {/* Overdue */}
-        <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-[#111113] border border-white/5 space-y-1.5 sm:space-y-2">
-          <div className="flex items-center justify-between text-[11px] sm:text-xs text-[#71717A]">
-            <span className="truncate">Overdue Tasks</span>
-            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400 shrink-0" />
+        {/* Overdue Tasks */}
+        <div className="p-3 sm:p-3.5 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-1.5">
+          <div className="flex items-center justify-between text-[9px] uppercase font-mono tracking-[0.14em] text-[#71717A]">
+            <span className="truncate">OVERDUE</span>
+            <Clock className="w-3.5 h-3.5 text-rose-400 shrink-0" />
           </div>
-          <div className="flex items-baseline gap-1.5 sm:gap-2">
+          <div className="flex items-baseline gap-1.5">
             <span
               className={`text-xl sm:text-2xl font-bold font-mono ${
                 metrics.overdueCount > 0 ? 'text-rose-400' : 'text-[#FAFAFA]'
@@ -303,53 +338,75 @@ export function AnalyticsDashboard({
             >
               {metrics.overdueCount}
             </span>
-            <span className="text-[10px] sm:text-xs text-[#71717A]">overdue</span>
+            <span className="text-[10px] text-[#71717A] font-mono">critical</span>
           </div>
-          <p className="text-[10px] sm:text-[11px] text-[#71717A] truncate hidden sm:block">Requires scheduling</p>
+          <div className="w-full bg-[#10151C] h-1.5 rounded-full overflow-hidden">
+            <div
+              className="bg-rose-500 h-full transition-all duration-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]"
+              style={{
+                width: `${Math.min(100, (metrics.overdueCount / (metrics.totalIssues || 1)) * 100)}%`,
+              }}
+            />
+          </div>
         </div>
 
         {/* Unassigned Pool */}
-        <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-[#111113] border border-white/5 space-y-1.5 sm:space-y-2">
-          <div className="flex items-center justify-between text-[11px] sm:text-xs text-[#71717A]">
-            <span className="truncate">Unassigned</span>
-            <UserX className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400 shrink-0" />
+        <div className="p-3 sm:p-3.5 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-1.5">
+          <div className="flex items-center justify-between text-[9px] uppercase font-mono tracking-[0.14em] text-[#71717A]">
+            <span className="truncate">UNASSIGNED</span>
+            <UserX className="w-3.5 h-3.5 text-amber-400 shrink-0" />
           </div>
-          <div className="flex items-baseline gap-1.5 sm:gap-2">
-            <span className="text-xl sm:text-2xl font-bold font-mono text-amber-400">{metrics.unassignedCount}</span>
-            <span className="text-[10px] sm:text-xs text-[#71717A]">claimable</span>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-xl sm:text-2xl font-bold font-mono text-amber-400">
+              {metrics.unassignedCount}
+            </span>
+            <span className="text-[10px] text-[#71717A] font-mono">claimable</span>
           </div>
-          <p className="text-[10px] sm:text-[11px] text-[#71717A] truncate hidden sm:block">Available in Pool</p>
+          <div className="w-full bg-[#10151C] h-1.5 rounded-full overflow-hidden">
+            <div
+              className="bg-amber-400 h-full transition-all duration-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]"
+              style={{
+                width: `${Math.min(100, (metrics.unassignedCount / (metrics.totalIssues || 1)) * 100)}%`,
+              }}
+            />
+          </div>
         </div>
       </div>
 
       {/* AI Key Insights Banner */}
-      <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-[#111113] to-purple-950/40 border border-blue-500/30 space-y-3 shadow-lg">
-        <div className="flex items-center gap-2 text-blue-400 text-xs font-semibold font-mono uppercase tracking-wider">
-          <Zap className="w-4 h-4 text-blue-400" />
-          <span>AI Operational Health & Recommendations</span>
+      <div className="p-4 rounded-xl bg-gradient-to-r from-cyan-950/20 via-[#0B0F14] to-violet-950/20 border border-cyan-500/25 space-y-2.5">
+        <div className="flex items-center gap-2 text-cyan-400 text-xs font-semibold font-mono uppercase tracking-wider">
+          <Zap className="w-4 h-4 text-cyan-400" />
+          <span>AI Velocity & Operational Recommendations</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-[#E4E4E7]">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs font-mono text-[#E4E4E7]">
           {metrics.keyInsights.map((insight, idx) => (
-            <div key={idx} className="p-2.5 rounded-xl bg-[#18181B]/80 border border-white/5 flex items-center gap-2">
-              <span>{insight}</span>
+            <div
+              key={idx}
+              className="p-2.5 rounded-lg bg-[#10151C] border border-white/[0.06] flex items-center gap-2"
+            >
+              <span className="text-cyan-400 font-bold">✦</span>
+              <span className="text-[11px] leading-relaxed">{insight}</span>
             </div>
           ))}
         </div>
       </div>
 
       {/* CHART 1: Velocity & Throughput Trend Area Chart */}
-      <div className="p-5 rounded-2xl bg-[#111113] border border-white/5 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/5 pb-3">
+      <div className="p-4 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.04] pb-2.5">
           <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-blue-400" />
-            <h3 className="text-sm font-semibold text-[#FAFAFA]">Task Throughput & Velocity Trend</h3>
+            <Activity className="w-4 h-4 text-cyan-400" />
+            <TechnicalLabel>Task Throughput & Velocity Timeline</TechnicalLabel>
           </div>
 
-          <div className="flex items-center p-0.5 bg-[#18181B] border border-white/10 rounded-lg self-start sm:self-auto">
+          <div className="flex items-center p-0.5 bg-[#10151C] border border-white/[0.08] rounded-lg self-start sm:self-auto">
             <button
               onClick={() => setTimeRange('7d')}
               className={`text-xs px-2.5 py-1 rounded-md font-mono transition-colors ${
-                timeRange === '7d' ? 'bg-blue-600 text-white shadow-sm' : 'text-[#71717A] hover:text-[#FAFAFA]'
+                timeRange === '7d'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                  : 'text-[#71717A] hover:text-[#FAFAFA]'
               }`}
             >
               Last 7 Days
@@ -357,7 +414,9 @@ export function AnalyticsDashboard({
             <button
               onClick={() => setTimeRange('30d')}
               className={`text-xs px-2.5 py-1 rounded-md font-mono transition-colors ${
-                timeRange === '30d' ? 'bg-blue-600 text-white shadow-sm' : 'text-[#71717A] hover:text-[#FAFAFA]'
+                timeRange === '30d'
+                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
+                  : 'text-[#71717A] hover:text-[#FAFAFA]'
               }`}
             >
               Last 30 Days
@@ -365,28 +424,28 @@ export function AnalyticsDashboard({
           </div>
         </div>
 
-        <div className="h-64 sm:h-72 w-full">
+        <div className="h-56 sm:h-64 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={throughputTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#10B981" stopOpacity={0.4} />
+                  <stop offset="95%" stopColor="#10B981" stopOpacity={0.0} />
                 </linearGradient>
                 <linearGradient id="colorCreated" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
-                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  <stop offset="5%" stopColor="#38BDF8" stopOpacity={0.4} />
+                  <stop offset="95%" stopColor="#38BDF8" stopOpacity={0.0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-              <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
-              <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+              <XAxis dataKey="date" stroke="#52525B" tick={{ fontSize: 10, fill: '#71717A' }} tickLine={false} axisLine={false} />
+              <YAxis stroke="#52525B" tick={{ fontSize: 10, fill: '#71717A' }} tickLine={false} axisLine={false} allowDecimals={false} />
               <Tooltip content={<CustomChartTooltip />} />
               <Area
                 type="monotone"
                 dataKey="completed"
                 name="Completed Tasks"
-                stroke="#10b981"
+                stroke="#10B981"
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorCompleted)"
@@ -395,7 +454,7 @@ export function AnalyticsDashboard({
                 type="monotone"
                 dataKey="created"
                 name="Created Tasks"
-                stroke="#3b82f6"
+                stroke="#38BDF8"
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorCreated)"
@@ -406,41 +465,41 @@ export function AnalyticsDashboard({
       </div>
 
       {/* CHARTS ROW 2: Priority Donut + Task State Bar Chart */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Priority Distribution Donut Chart */}
-        <div className="p-5 rounded-2xl bg-[#111113] border border-white/5 space-y-4 flex flex-col">
-          <div className="flex items-center justify-between border-b border-white/5 pb-3">
-            <h3 className="text-sm font-semibold text-[#FAFAFA] flex items-center gap-2">
+        <div className="p-4 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-3 flex flex-col">
+          <div className="flex items-center justify-between border-b border-white/[0.04] pb-2.5">
+            <div className="flex items-center gap-2">
               <PieIcon className="w-4 h-4 text-orange-400" />
-              <span>Priority Breakdown</span>
-            </h3>
+              <TechnicalLabel>Priority Breakdown</TechnicalLabel>
+            </div>
             <span className="text-xs font-mono text-[#71717A]">
               Total: {metrics.totalIssues}
             </span>
           </div>
 
-          <div className="h-60 sm:h-64 w-full relative">
+          <div className="h-56 sm:h-60 w-full relative">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={priorityChartData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={55}
-                  outerRadius={80}
+                  innerRadius={50}
+                  outerRadius={75}
                   paddingAngle={4}
                   dataKey="value"
                 >
                   {priorityChartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} stroke="#111113" strokeWidth={2} />
+                    <Cell key={`cell-${index}`} fill={entry.color} stroke="#0B0F14" strokeWidth={2} />
                   ))}
                 </Pie>
                 <Tooltip content={<CustomChartTooltip />} />
                 <Legend
                   verticalAlign="bottom"
-                  height={36}
+                  height={32}
                   iconType="circle"
-                  formatter={(value) => <span className="text-xs text-[#A1A1AA] capitalize">{value}</span>}
+                  formatter={(value) => <span className="text-xs font-mono text-[#A1A1AA] capitalize">{value}</span>}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -448,23 +507,23 @@ export function AnalyticsDashboard({
         </div>
 
         {/* Task State Breakdown Bar Chart */}
-        <div className="p-5 rounded-2xl bg-[#111113] border border-white/5 space-y-4 flex flex-col">
-          <div className="flex items-center justify-between border-b border-white/5 pb-3">
-            <h3 className="text-sm font-semibold text-[#FAFAFA] flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-purple-400" />
-              <span>Task State Distribution</span>
-            </h3>
-            <span className="text-xs font-mono text-[#71717A]">
-              {metrics.completedIssues} Done
+        <div className="p-4 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-3 flex flex-col">
+          <div className="flex items-center justify-between border-b border-white/[0.04] pb-2.5">
+            <div className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-violet-400" />
+              <TechnicalLabel>Task State Distribution</TechnicalLabel>
+            </div>
+            <span className="text-xs font-mono text-emerald-400">
+              {metrics.completedIssues} Completed
             </span>
           </div>
 
-          <div className="h-60 sm:h-64 w-full">
+          <div className="h-56 sm:h-60 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stateChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                <XAxis dataKey="state" stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                <XAxis dataKey="state" stroke="#52525B" tick={{ fontSize: 10, fill: '#71717A' }} tickLine={false} axisLine={false} />
+                <YAxis stroke="#52525B" tick={{ fontSize: 10, fill: '#71717A' }} tickLine={false} axisLine={false} allowDecimals={false} />
                 <Tooltip content={<CustomChartTooltip />} />
                 <Bar dataKey="count" name="Tasks" radius={[6, 6, 0, 0]}>
                   {stateChartData.map((entry, index) => (
@@ -479,25 +538,25 @@ export function AnalyticsDashboard({
 
       {/* CHART 3: Cross-Project Workload Horizontal Stacked Chart (When ALL projects is active) */}
       {activeProjectKey === 'ALL' && crossProjectChartData.length > 0 && (
-        <div className="p-5 rounded-2xl bg-[#111113] border border-white/5 space-y-4">
-          <div className="flex items-center justify-between border-b border-white/5 pb-3">
-            <h3 className="text-sm font-semibold text-[#FAFAFA] flex items-center gap-2">
-              <Layers className="w-4 h-4 text-blue-400" />
-              <span>Cross-Project Workload Comparison</span>
-            </h3>
-            <span className="text-[10px] font-mono font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full whitespace-nowrap">
+        <div className="p-4 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-3">
+          <div className="flex items-center justify-between border-b border-white/[0.04] pb-2.5">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-cyan-400" />
+              <TechnicalLabel>Cross-Project Workload Comparison</TechnicalLabel>
+            </div>
+            <span className="text-[10px] font-mono font-semibold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-full whitespace-nowrap">
               {crossProjectChartData.length} Projects
             </span>
           </div>
 
-          {/* Clean HTML Legend (Zero SVG overlap) */}
-          <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-[#A1A1AA] pt-1">
+          {/* Clean HTML Legend */}
+          <div className="flex flex-wrap items-center gap-3 text-xs font-mono text-[#A1A1AA] pt-1">
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-xs bg-[#10b981]" />
               <span>Completed</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-xs bg-[#3b82f6]" />
+              <span className="w-2.5 h-2.5 rounded-xs bg-[#38bdf8]" />
               <span>In Progress</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -512,19 +571,19 @@ export function AnalyticsDashboard({
 
           <div
             className="w-full"
-            style={{ height: `${Math.max(220, crossProjectChartData.length * 48)}px` }}
+            style={{ height: `${Math.max(200, crossProjectChartData.length * 44)}px` }}
           >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 layout="vertical"
                 data={crossProjectChartData}
-                margin={{ top: 10, right: 15, left: 10, bottom: 5 }}
+                margin={{ top: 10, right: 15, left: 0, bottom: 5 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
                 <XAxis
                   type="number"
-                  stroke="#71717a"
-                  fontSize={11}
+                  stroke="#52525B"
+                  tick={{ fontSize: 10, fill: '#71717A' }}
                   tickLine={false}
                   axisLine={false}
                   allowDecimals={false}
@@ -532,15 +591,15 @@ export function AnalyticsDashboard({
                 <YAxis
                   type="category"
                   dataKey="identifier"
-                  stroke="#71717a"
-                  fontSize={11}
+                  stroke="#52525B"
+                  tick={{ fontSize: 10, fill: '#71717A' }}
                   tickLine={false}
                   axisLine={false}
-                  width={95}
+                  width={80}
                 />
                 <Tooltip content={<CustomChartTooltip />} />
                 <Bar dataKey="completed" name="Completed" stackId="a" fill="#10b981" />
-                <Bar dataKey="inProgress" name="In Progress" stackId="a" fill="#3b82f6" />
+                <Bar dataKey="inProgress" name="In Progress" stackId="a" fill="#38bdf8" />
                 <Bar dataKey="unstarted" name="Unstarted" stackId="a" fill="#f59e0b" />
                 <Bar dataKey="overdue" name="Overdue" stackId="a" fill="#f43f5e" radius={[0, 4, 4, 0]} />
               </BarChart>

@@ -64,14 +64,22 @@ export function calculateProjectHealth(
   const todayStr = nowDate.toISOString().slice(0, 10);
 
   for (const issue of issues) {
-    const stateStr = typeof issue.state === 'string' ? issue.state : '';
-    const group = (stateStr ? stateGroupMap.get(stateStr) : '') || stateStr.toLowerCase();
+    let group = '';
+    if (typeof issue.state === 'string') {
+      group = stateGroupMap.get(issue.state) || issue.state;
+    } else if (issue.state && typeof issue.state === 'object') {
+      group = (issue.state as any).group || (issue.state.id ? stateGroupMap.get(issue.state.id) : '') || (issue.state as any).name || '';
+    }
+    if (!group && issue.state_detail) {
+      group = issue.state_detail.group || issue.state_detail.name || '';
+    }
+    group = (group || '').toLowerCase().trim();
 
-    if (group === 'completed' || group === 'done') {
+    if (group.includes('completed') || group.includes('done')) {
       completed++;
-    } else if (group === 'started' || group === 'in_progress' || group === 'in progress') {
+    } else if (group.includes('started') || group.includes('progress')) {
       inProgress++;
-    } else if (group === 'unstarted') {
+    } else if (group.includes('unstarted') || group.includes('todo') || group.includes('open')) {
       unstarted++;
     } else {
       backlog++;

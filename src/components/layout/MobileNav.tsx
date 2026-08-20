@@ -14,7 +14,8 @@ import {
   LogOut,
   X,
   User,
-  Sparkles
+  Sparkles,
+  Cpu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useWorkspaceStore } from '@/stores/workspace-store';
@@ -143,6 +144,28 @@ export function MobileNav() {
               {/* Navigation Items Grid */}
               <div className="grid grid-cols-1 gap-2">
                 <button
+                  onClick={() => handleNavigate('/telemetry')}
+                  className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                    pathname === '/telemetry'
+                      ? 'bg-violet-500/10 border-violet-500/30 text-violet-400'
+                      : 'bg-[#10151C] border-white/[0.06] text-[#FAFAFA] hover:border-white/20'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400">
+                      <Cpu className="w-5 h-5" />
+                    </div>
+                    <div className="text-left">
+                      <div className="text-xs font-semibold font-mono">AI Token Telemetry</div>
+                      <div className="text-[10px] text-[#71717A]">Gemini Quota & Consumption</div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-[#080B10] text-[#71717A] border border-white/[0.06] font-mono">
+                    /telemetry
+                  </span>
+                </button>
+
+                <button
                   onClick={() => handleNavigate('/analytics')}
                   className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
                     pathname === '/analytics'
@@ -155,7 +178,7 @@ export function MobileNav() {
                       <BarChart3 className="w-5 h-5" />
                     </div>
                     <div className="text-left">
-                      <div className="text-xs font-semibold font-mono">System Telemetry</div>
+                      <div className="text-xs font-semibold font-mono">System Analytics</div>
                       <div className="text-[10px] text-[#71717A]">Health, Velocity, Observability</div>
                     </div>
                   </div>

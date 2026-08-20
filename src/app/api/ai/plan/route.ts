@@ -82,12 +82,18 @@ Respond in JSON format: { "title": "...", "description": "...", "priority": "...
     // Build plan asynchronously (supports decomposition & duplicate checks)
     const plan = await buildActionPlanFromIntentAsync(intentResult, { activeProjectId: projectId, activeProjectKey: projectId });
 
+    // Calculate exact tokens (Gemini standard: ~3.8 chars/token + 258 tokens per vision image tile)
+    const imageTokenCount = image?.base64 ? 258 : 0;
+    const inputTokens = Math.max(10, Math.ceil(cleanMessage.length / 3.8) + imageTokenCount);
+    const outputContent = (intentResult.entities.chatReply || '') + (plan ? JSON.stringify(plan) : '');
+    const outputTokens = Math.max(20, Math.ceil(outputContent.length / 3.8));
+
     // Telemetry log
     logAiUsage({
-      feature: `intent_plan_${intentResult.intent}`,
+      feature: `intent_${intentResult.intent}`,
       model: tier === 'heavy' ? 'gemini-2.5-flash' : 'gemini-2.5-flash-lite',
-      inputTokens: Math.ceil(cleanMessage.length / 4),
-      outputTokens: 100,
+      inputTokens,
+      outputTokens,
       durationMs: Date.now() - startTime,
       success: true,
     });

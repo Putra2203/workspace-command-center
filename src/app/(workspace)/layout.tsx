@@ -12,13 +12,14 @@ import { StatusIndicator } from '@/components/ui/StatusIndicator';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import { WorkspaceDataProvider, useWorkspaceData } from '@/lib/context/workspace-data';
 
-const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
-  '/day': { title: 'Daily Mission', subtitle: 'Daily Operations & Focus Queue' },
-  '/command': { title: 'AI Command Center', subtitle: 'Gemini Intelligence Layer' },
-  '/board': { title: 'Operations Board', subtitle: 'Mission Kanban & Work Flow' },
-  '/issues': { title: 'Work Items', subtitle: 'Global Backlog & Tracking' },
-  '/cycles': { title: 'Cycles & Sprints', subtitle: 'Sprint Iterations' },
-  '/analytics': { title: 'System Telemetry', subtitle: 'Health, Velocity & Observability' },
+const PAGE_TITLES: Record<string, { title: string; shortTitle?: string; subtitle: string }> = {
+  '/day': { title: 'Daily Mission', shortTitle: 'Daily', subtitle: 'Daily Operations & Focus Queue' },
+  '/command': { title: 'AI Command Center', shortTitle: 'AI Console', subtitle: 'Gemini Intelligence Layer' },
+  '/board': { title: 'Operations Board', shortTitle: 'Board', subtitle: 'Mission Kanban & Work Flow' },
+  '/issues': { title: 'Work Items', shortTitle: 'Backlog', subtitle: 'Global Backlog & Tracking' },
+  '/cycles': { title: 'Cycles & Sprints', shortTitle: 'Cycles', subtitle: 'Sprint Iterations' },
+  '/telemetry': { title: 'AI Token Telemetry', shortTitle: 'Telemetry', subtitle: 'Gemini Quota & Consumption Observability' },
+  '/analytics': { title: 'System Analytics', shortTitle: 'Analytics', subtitle: 'Health, Velocity & Observability' },
 };
 
 function WorkspaceShell({ children }: { children: React.ReactNode }) {
@@ -63,7 +64,7 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const pageMeta = PAGE_TITLES[pathname] || { title: 'Erdavid Work OS', subtitle: 'Operations' };
+  const pageMeta = PAGE_TITLES[pathname] || { title: 'Erdavid Work OS', shortTitle: 'Work OS', subtitle: 'Operations' };
 
   return (
     <div className="h-screen flex overflow-hidden relative bg-[#05070A] bg-technical-grid ambient-lighting">
@@ -83,7 +84,8 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
             {/* Page Title */}
             <div className="flex flex-col min-w-0">
               <h1 className="text-xs sm:text-sm font-bold text-[#FAFAFA] tracking-tight truncate font-mono">
-                {pageMeta.title}
+                <span className="hidden sm:inline">{pageMeta.title}</span>
+                <span className="sm:hidden">{pageMeta.shortTitle || pageMeta.title}</span>
               </h1>
             </div>
 

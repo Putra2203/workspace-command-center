@@ -78,7 +78,8 @@ export function Sidebar({ projects }: SidebarProps) {
 
   const systemNavItems: { id: string; label: string; icon: any; isAI?: boolean }[] = [
     { id: 'command', label: 'AI Command Center', icon: TerminalSquare, isAI: true },
-    { id: 'analytics', label: 'System Telemetry', icon: BarChart3 },
+    { id: 'telemetry', label: 'AI Token Telemetry', icon: Cpu, isAI: true },
+    { id: 'analytics', label: 'System Analytics', icon: BarChart3 },
   ];
 
   return (
