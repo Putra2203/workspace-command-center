@@ -49,19 +49,19 @@ export function QuickTaskCapture({ activeProjectKey, onTaskCreated }: QuickTaskC
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-center gap-2 bg-[#111113] border border-white/10 p-1.5 rounded-xl focus-within:border-blue-500/50 transition-colors">
+    <form onSubmit={handleSubmit} className="flex items-center gap-1.5 sm:gap-2 bg-[#111113] border border-white/10 p-1.5 rounded-xl focus-within:border-blue-500/50 transition-colors">
       <input
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Quick add a task... (e.g. Fix navbar alignment)"
-        className="flex-1 bg-transparent border-none outline-none text-xs text-[#FAFAFA] placeholder-[#71717A] px-2"
+        placeholder="Quick add a task..."
+        className="min-w-0 flex-1 bg-transparent border-none outline-none text-xs text-[#FAFAFA] placeholder-[#71717A] px-1.5 sm:px-2"
       />
 
       <select
         value={priority}
         onChange={(e) => setPriority(e.target.value)}
-        className="bg-[#18181B] border border-white/10 text-[11px] text-[#A1A1AA] rounded-lg px-2 py-1 outline-none font-mono capitalize"
+        className="bg-[#18181B] border border-white/10 text-[10px] sm:text-[11px] text-[#A1A1AA] rounded-lg px-1.5 sm:px-2 py-1 outline-none font-mono capitalize shrink-0"
       >
         <option value="urgent">Urgent</option>
         <option value="high">High</option>
@@ -72,14 +72,15 @@ export function QuickTaskCapture({ activeProjectKey, onTaskCreated }: QuickTaskC
       <button
         type="submit"
         disabled={!title.trim() || isSubmitting}
-        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium flex items-center gap-1 disabled:opacity-50 transition-colors shrink-0"
+        className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium flex items-center gap-1 disabled:opacity-50 transition-colors shrink-0"
       >
         {isSubmitting ? (
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
         ) : (
           <>
             <Plus className="w-3.5 h-3.5" />
-            <span>Add Task</span>
+            <span className="hidden sm:inline">Add Task</span>
+            <span className="sm:hidden">Add</span>
           </>
         )}
       </button>

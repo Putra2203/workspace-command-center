@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AnimatePresence } from 'motion/react';
 import { AlertTriangle } from 'lucide-react';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { useWorkspaceStore } from '@/stores/workspace-store';
@@ -69,19 +70,22 @@ export default function BoardPage() {
         onSelectIssue={(id) => setSelectedIssueId(id)}
       />
 
-      {selectedIssue && (
-        <WorkItemDetailPanel
-          issue={selectedIssue}
-          allIssues={issues}
-          states={states}
-          memberMap={memberMap}
-          activeProjectKey={activeProjectKey}
-          currentUserId={currentUser?.id || null}
-          onClose={() => setSelectedIssueId(null)}
-          onOpenIssue={(id) => setSelectedIssueId(id)}
-          onChanged={() => fetchProjectData(true)}
-        />
-      )}
+      <AnimatePresence>
+        {selectedIssue && (
+          <WorkItemDetailPanel
+            key={selectedIssue.id}
+            issue={selectedIssue}
+            allIssues={issues}
+            states={states}
+            memberMap={memberMap}
+            activeProjectKey={activeProjectKey}
+            currentUserId={currentUser?.id || null}
+            onClose={() => setSelectedIssueId(null)}
+            onOpenIssue={(id) => setSelectedIssueId(id)}
+            onChanged={() => fetchProjectData(true)}
+          />
+        )}
+      </AnimatePresence>
     </>
   );
 }

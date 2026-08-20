@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { AnimatePresence } from 'motion/react';
 import { ListTodo, RefreshCw, AlertTriangle, Layers } from 'lucide-react';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import { useWorkspaceData } from '@/lib/context/workspace-data';
@@ -118,19 +119,22 @@ export default function IssuesPage() {
         </div>
       )}
 
-      {selectedIssue && (
-        <WorkItemDetailPanel
-          issue={selectedIssue}
-          allIssues={issues}
-          states={states}
-          memberMap={memberMap}
-          activeProjectKey={activeProjectKey}
-          currentUserId={currentUser?.id || null}
-          onClose={() => setSelectedIssueId(null)}
-          onOpenIssue={(id) => setSelectedIssueId(id)}
-          onChanged={() => fetchProjectData(true)}
-        />
-      )}
+      <AnimatePresence>
+        {selectedIssue && (
+          <WorkItemDetailPanel
+            key={selectedIssue.id}
+            issue={selectedIssue}
+            allIssues={issues}
+            states={states}
+            memberMap={memberMap}
+            activeProjectKey={activeProjectKey}
+            currentUserId={currentUser?.id || null}
+            onClose={() => setSelectedIssueId(null)}
+            onOpenIssue={(id) => setSelectedIssueId(id)}
+            onChanged={() => fetchProjectData(true)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

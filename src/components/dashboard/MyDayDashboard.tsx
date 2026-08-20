@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
 import { Activity, AlertTriangle, Ban, CalendarClock, Flame, Clock, Ticket, Check, GitBranch, Copy, CheckCircle2 } from 'lucide-react';
 import { computeMyDayBuckets, type PlaneStateLike, type WorkItemLike } from '@/domain/work_items/my-day';
 import { scoreTask } from '@/domain/work_items/scoring';
@@ -141,7 +142,7 @@ export function MyDayDashboard({ issues, states, memberMap, currentUserId, activ
       />
 
       {/* Top Metrics Strip */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {cards.map(card => {
           const Icon = card.icon;
           return (
@@ -180,9 +181,9 @@ export function MyDayDashboard({ issues, states, memberMap, currentUserId, activ
               <div
                 key={ticket.id}
                 onClick={() => setSelectedIssueId(ticket.id)}
-                className="flex flex-col sm:flex-row sm:items-center justify-between p-2 rounded-lg bg-[#111113] border border-white/10 hover:border-blue-500/40 transition-all gap-2 cursor-pointer"
+                className="flex items-center justify-between p-2 rounded-lg bg-[#111113] border border-white/10 hover:border-blue-500/40 transition-all gap-2 cursor-pointer"
               >
-                <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
+                <div className="flex items-center gap-2.5 overflow-hidden min-w-0 flex-1">
                   <span className="text-[11px] font-mono font-semibold text-blue-400 shrink-0 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
                     {ticket.project_detail?.identifier || activeProjectKey || 'TASK'}-{ticket.sequence_id || ''}
                   </span>
@@ -278,19 +279,22 @@ export function MyDayDashboard({ issues, states, memberMap, currentUserId, activ
       />
 
       {/* Work Item Detail Drawer / Modal */}
-      {selectedIssue && (
-        <WorkItemDetailPanel
-          issue={selectedIssue}
-          allIssues={issues}
-          states={states}
-          memberMap={memberMap}
-          activeProjectKey={activeProjectKey}
-          currentUserId={currentUserId}
-          onClose={() => setSelectedIssueId(null)}
-          onOpenIssue={(id) => setSelectedIssueId(id)}
-          onChanged={handleTaskUpdated}
-        />
-      )}
+      <AnimatePresence>
+        {selectedIssue && (
+          <WorkItemDetailPanel
+            key={selectedIssue.id}
+            issue={selectedIssue}
+            allIssues={issues}
+            states={states}
+            memberMap={memberMap}
+            activeProjectKey={activeProjectKey}
+            currentUserId={currentUserId}
+            onClose={() => setSelectedIssueId(null)}
+            onOpenIssue={(id) => setSelectedIssueId(id)}
+            onChanged={handleTaskUpdated}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

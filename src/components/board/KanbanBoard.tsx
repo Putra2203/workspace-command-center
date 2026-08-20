@@ -60,7 +60,7 @@ function Column({ state, issues, selectedIds, onToggleSelect, onSelectIssue }: C
   });
 
   return (
-    <div className="flex flex-col w-72 shrink-0 h-full max-h-full overflow-hidden bg-[#09090B] border-r border-white/5 last:border-r-0">
+    <div className="flex flex-col w-[85vw] sm:w-72 shrink-0 snap-center h-full max-h-full overflow-hidden bg-[#09090B] border-r border-white/5 last:border-r-0">
       <div className="p-3 border-b border-white/5 flex items-center gap-2 sticky top-0 bg-[#09090B] z-10">
         <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: state.color }} />
         <span className="font-medium text-sm text-[#FAFAFA]">{state.name}</span>
@@ -205,7 +205,7 @@ export function KanbanBoard({ states, issues: initialIssues, onMoveIssue, onBulk
   };
 
   return (
-    <div className="relative flex h-full w-full overflow-x-auto bg-[#09090B] scrollbar-thin">
+    <div className="relative flex h-full w-full overflow-x-auto bg-[#09090B] scrollbar-thin snap-x snap-mandatory pb-16 md:pb-0">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -225,7 +225,7 @@ export function KanbanBoard({ states, issues: initialIssues, onMoveIssue, onBulk
       </DndContext>
 
       {selectedIds.size > 0 && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-3 px-4 py-2.5 rounded-xl bg-[#111113] border border-white/10 shadow-2xl">
+        <div className="absolute bottom-20 sm:bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#111113] border border-white/10 shadow-2xl max-w-[95vw] overflow-x-auto">
           <span className="text-xs text-[#A1A1AA] font-medium">{selectedIds.size} selected</span>
           <div className="w-px h-4 bg-white/10" />
           <span className="text-xs text-[#71717A] flex items-center gap-1">

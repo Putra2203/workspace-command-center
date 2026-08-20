@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import DOMPurify from 'dompurify';
+import { motion } from 'motion/react';
 import {
   X,
   Check,
@@ -275,74 +276,109 @@ export function WorkItemDetailPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true">
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
+        className="absolute inset-0 bg-black/70 backdrop-blur-xs"
+        onClick={onClose}
+      />
 
-      <div className="relative w-full sm:w-[560px] h-full bg-[#0B0B0D] border-l border-white/10 overflow-y-auto scrollbar-thin p-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-mono text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
-            {issueKey}
-          </span>
-          <button
-            onClick={onClose}
-            className="w-7 h-7 rounded-lg border border-white/10 flex items-center justify-center text-[#71717A] hover:text-[#FAFAFA] hover:border-white/20 transition-colors"
-            aria-label="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+      {/* Bottom Sheet Card */}
+      <motion.div
+        initial={{ y: '100%', opacity: 0.5 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: '100%', opacity: 0 }}
+        transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+        drag="y"
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.5 }}
+        onDragEnd={(_, info) => {
+          if (info.offset.y > 100 || info.velocity.y > 400) {
+            onClose();
+          }
+        }}
+        className="relative w-full max-w-4xl mx-auto h-[85vh] max-h-[85vh] bg-[#0B0B0D] border-t border-x border-white/10 rounded-t-2xl shadow-2xl flex flex-col overflow-hidden"
+      >
+        {/* Sticky Header with Drag Handle */}
+        <div className="px-5 pt-2.5 pb-3 border-b border-white/10 bg-[#0B0B0D] shrink-0 space-y-2">
+          {/* Drag Handle Indicator */}
+          <div className="w-12 h-1 rounded-full bg-white/20 mx-auto cursor-grab active:cursor-grabbing hover:bg-white/40 transition-colors" onClick={onClose} title="Close sheet" />
 
-        {parentIssue && (
-          <button
-            onClick={() => onOpenIssue(parentIssue.id)}
-            className="flex items-center gap-1.5 text-[11px] text-[#71717A] hover:text-blue-400 transition-colors"
-          >
-            <CornerUpLeft className="w-3 h-3" />
-            <span className="truncate">Parent: {projectKey}-{parentIssue.sequence_id} — {titleOf(parentIssue)}</span>
-          </button>
-        )}
-
-        <h2 className="text-base font-bold text-[#FAFAFA] leading-snug">{titleOf(issue)}</h2>
-
-        {/* Quick fields */}
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={issue.priority || 'none'}
-            onChange={(e) => handlePriorityChange(e.target.value)}
-            disabled={savingField === 'priority'}
-            className="bg-[#111113] border border-white/10 text-[11px] text-[#A1A1AA] rounded px-2 py-1 outline-none font-mono capitalize disabled:opacity-50"
-          >
-            {PRIORITY_OPTIONS.map(p => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
-
-          <select
-            value={stateDetail?.id || ''}
-            onChange={(e) => handleStateChange(e.target.value)}
-            disabled={savingField === 'state'}
-            className="bg-[#111113] border border-white/10 text-[11px] rounded px-2 py-1 outline-none font-mono disabled:opacity-50"
-            style={{ color: stateDetail?.color || '#A1A1AA' }}
-          >
-            {states.map(s => (
-              <option key={s.id} value={s.id} style={{ color: '#FAFAFA' }}>{s.name}</option>
-            ))}
-          </select>
-
-          {(!issue.assignees || issue.assignees.length === 0) && currentUserId && (
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[11px] font-mono text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 shrink-0">
+                {issueKey}
+              </span>
+              {parentIssue && (
+                <button
+                  onClick={() => onOpenIssue(parentIssue.id)}
+                  className="flex items-center gap-1 text-[11px] text-[#71717A] hover:text-blue-400 transition-colors truncate"
+                >
+                  <CornerUpLeft className="w-3 h-3 shrink-0" />
+                  <span className="truncate">Parent: {projectKey}-{parentIssue.sequence_id} — {titleOf(parentIssue)}</span>
+                </button>
+              )}
+            </div>
             <button
-              onClick={handleAssignToMe}
-              disabled={savingField === 'assign'}
-              className="flex items-center gap-1 px-2 py-1 rounded bg-[#111113] border border-white/10 hover:border-blue-500/40 text-[11px] text-[#71717A] hover:text-blue-400 transition-colors disabled:opacity-50"
+              onClick={onClose}
+              className="w-7 h-7 rounded-lg border border-white/10 flex items-center justify-center text-[#71717A] hover:text-[#FAFAFA] hover:border-white/20 transition-colors shrink-0"
+              aria-label="Close"
             >
-              {savingField === 'assign' ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
-              <span>Assign to me</span>
+              <X className="w-4 h-4" />
             </button>
-          )}
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <h2 className="text-base sm:text-lg font-bold text-[#FAFAFA] leading-tight truncate">{titleOf(issue)}</h2>
+
+            {/* Quick fields */}
+            <div className="flex items-center gap-2 shrink-0">
+              <select
+                value={issue.priority || 'none'}
+                onChange={(e) => handlePriorityChange(e.target.value)}
+                disabled={savingField === 'priority'}
+                className="bg-[#111113] border border-white/10 text-[11px] text-[#A1A1AA] rounded px-2 py-1 outline-none font-mono capitalize disabled:opacity-50"
+              >
+                {PRIORITY_OPTIONS.map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+
+              <select
+                value={stateDetail?.id || ''}
+                onChange={(e) => handleStateChange(e.target.value)}
+                disabled={savingField === 'state'}
+                className="bg-[#111113] border border-white/10 text-[11px] rounded px-2 py-1 outline-none font-mono disabled:opacity-50"
+                style={{ color: stateDetail?.color || '#A1A1AA' }}
+              >
+                {states.map(s => (
+                  <option key={s.id} value={s.id} style={{ color: '#FAFAFA' }}>{s.name}</option>
+                ))}
+              </select>
+
+              {(!issue.assignees || issue.assignees.length === 0) && currentUserId && (
+                <button
+                  onClick={handleAssignToMe}
+                  disabled={savingField === 'assign'}
+                  className="flex items-center gap-1 px-2 py-1 rounded bg-[#111113] border border-white/10 hover:border-blue-500/40 text-[11px] text-[#71717A] hover:text-blue-400 transition-colors disabled:opacity-50"
+                >
+                  {savingField === 'assign' ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
+                  <span>Assign to me</span>
+                </button>
+              )}
+            </div>
+          </div>
         </div>
+
+        {/* Scrollable Content Body */}
+        <div className="flex-1 overflow-y-auto scrollbar-thin p-5 space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
 
         {/* Meta grid */}
-        <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
           <div className="p-2 rounded-lg bg-[#111113] border border-white/5 flex items-center gap-2">
             <Users className="w-3.5 h-3.5 text-[#71717A] shrink-0" />
             <div className="min-w-0">
@@ -381,7 +417,7 @@ export function WorkItemDetailPanel({
             </div>
           </div>
 
-          <div className="p-2 rounded-lg bg-[#111113] border border-white/5 flex items-center gap-2 col-span-2">
+          <div className="p-2 rounded-lg bg-[#111113] border border-white/5 flex items-center gap-2 col-span-2 sm:col-span-4">
             <Clock className="w-3.5 h-3.5 text-[#71717A] shrink-0" />
             <div className="min-w-0 text-[11px] text-[#71717A] font-mono">
               Created {formatDate(issue.created_at)} · Updated {formatDate(issue.updated_at)}
@@ -508,7 +544,8 @@ export function WorkItemDetailPanel({
             </button>
           </form>
         </div>
-      </div>
+        </div>
+      </motion.div>
     </div>
   );
 }
