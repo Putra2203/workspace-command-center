@@ -43,53 +43,53 @@ export function WeeklyPerformanceWidget({ activeProjectId }: WeeklyPerformanceWi
   const completionRate = Math.round((completed7Days / total7Days) * 100);
 
   return (
-    <div className="mb-6 p-4 rounded-xl bg-[#111113] border border-white/5 space-y-3">
+    <div className="p-3 rounded-xl bg-[#111113] border border-white/5 space-y-2">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-semibold text-[#FAFAFA]">
-          <TrendingUp className="w-4 h-4 text-green-400" />
-          <span>Performa & Kecepatan 7 Hari Terakhir</span>
+          <TrendingUp className="w-3.5 h-3.5 text-green-400" />
+          <span>Performa & Kecepatan 7 Hari</span>
         </div>
         <span className="text-[10px] font-mono text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full">
-          {completionRate}% Completion Velocity
+          {completionRate}%
         </span>
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full bg-[#18181B] h-2 rounded-full overflow-hidden flex">
+      <div className="w-full bg-[#18181B] h-1.5 rounded-full overflow-hidden flex">
         <div
           className="bg-green-500 h-full transition-all duration-500"
           style={{ width: `${completionRate}%` }}
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-2 pt-1 text-xs">
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-[#18181B] border border-white/5">
-          <CheckCircle className="w-3.5 h-3.5 text-green-400 shrink-0" />
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-[#18181B] border border-white/5">
+          <CheckCircle className="w-3 h-3 text-green-400 shrink-0" />
           <div>
-            <div className="text-[10px] text-[#71717A]">Done (7 Hari)</div>
-            <div className="font-semibold text-[#FAFAFA] font-mono">{completed7Days}</div>
+            <div className="text-[10px] text-[#71717A]">Done</div>
+            <div className="font-semibold text-[#FAFAFA] font-mono text-[11px]">{completed7Days}</div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-[#18181B] border border-white/5">
-          <PlusCircle className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+        <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-[#18181B] border border-white/5">
+          <PlusCircle className="w-3 h-3 text-blue-400 shrink-0" />
           <div>
-            <div className="text-[10px] text-[#71717A]">Dibuat (7 Hari)</div>
-            <div className="font-semibold text-[#FAFAFA] font-mono">{created7Days}</div>
+            <div className="text-[10px] text-[#71717A]">Dibuat</div>
+            <div className="font-semibold text-[#FAFAFA] font-mono text-[11px]">{created7Days}</div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 p-2 rounded-lg bg-[#18181B] border border-white/5">
-          <AlertCircle className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+        <div className="flex items-center gap-1.5 p-1.5 rounded-lg bg-[#18181B] border border-white/5">
+          <AlertCircle className="w-3 h-3 text-purple-400 shrink-0" />
           <div>
             <div className="text-[10px] text-[#71717A]">Terhambat</div>
-            <div className="font-semibold text-[#FAFAFA] font-mono">{blockedCount}</div>
+            <div className="font-semibold text-[#FAFAFA] font-mono text-[11px]">{blockedCount}</div>
           </div>
         </div>
       </div>
 
       {data.summary && (
-        <p className="text-xs text-[#A1A1AA] italic pt-1 border-t border-white/5">
+        <p className="text-[11px] text-[#A1A1AA] italic pt-1 border-t border-white/5">
           "{data.summary}"
         </p>
       )}

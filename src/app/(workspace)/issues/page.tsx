@@ -1,13 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import { ListTodo, RefreshCw, AlertTriangle, Layers } from 'lucide-react';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import { useWorkspaceData } from '@/lib/context/workspace-data';
+import { WorkItemDetailPanel } from '@/components/work-items/WorkItemDetailPanel';
 
 export default function IssuesPage() {
-  const { activeProjectKey, userScope, setUserScope } = useWorkspaceStore();
+  const { currentUser, activeProjectKey, userScope, setUserScope } = useWorkspaceStore();
   const {
     issues,
+    states,
     displayIssues,
     memberMap,
     overdueIssueIds,
@@ -16,6 +19,9 @@ export default function IssuesPage() {
     fetchingIssues,
     fetchProjectData,
   } = useWorkspaceData();
+
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const selectedIssue = selectedIssueId ? issues.find(i => i.id === selectedIssueId) || null : null;
 
   return (
     <div className="p-6 overflow-y-auto h-full scrollbar-thin">
@@ -51,7 +57,11 @@ export default function IssuesPage() {
             const assigneeName = rawAssignee ? memberMap.get(rawAssignee) || '' : '';
 
             return (
-              <div key={issue.id} className="flex items-center justify-between p-3 rounded-lg bg-[#111113] border border-white/5 hover:border-white/10 transition-colors">
+              <div
+                key={issue.id}
+                onClick={() => setSelectedIssueId(issue.id)}
+                className="flex items-center justify-between p-3 rounded-lg bg-[#111113] border border-white/5 hover:border-white/10 hover:border-blue-500/30 transition-colors cursor-pointer"
+              >
                 <div className="flex items-center gap-3 overflow-hidden min-w-0 flex-1">
                   <span className="text-xs text-[#71717A] shrink-0 font-mono">
                     {issue.project_detail?.identifier || activeProjectKey}-{issue.sequence_id}
@@ -106,6 +116,20 @@ export default function IssuesPage() {
             </div>
           )}
         </div>
+      )}
+
+      {selectedIssue && (
+        <WorkItemDetailPanel
+          issue={selectedIssue}
+          allIssues={issues}
+          states={states}
+          memberMap={memberMap}
+          activeProjectKey={activeProjectKey}
+          currentUserId={currentUser?.id || null}
+          onClose={() => setSelectedIssueId(null)}
+          onOpenIssue={(id) => setSelectedIssueId(id)}
+          onChanged={() => fetchProjectData(true)}
+        />
       )}
     </div>
   );

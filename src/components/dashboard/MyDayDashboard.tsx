@@ -12,6 +12,7 @@ import { FocusModeBanner } from './FocusModeBanner';
 import { QuickTaskCapture } from './QuickTaskCapture';
 import { WeeklyPerformanceWidget } from './WeeklyPerformanceWidget';
 import { InboxTriageWidget } from './InboxTriageWidget';
+import { WorkItemDetailPanel } from '@/components/work-items/WorkItemDetailPanel';
 
 interface Issue extends WorkItemLike {
   name?: string;
@@ -21,17 +22,26 @@ interface Issue extends WorkItemLike {
   state?: any;
   updated_at?: string;
   project_detail?: { identifier: string };
+  description_html?: string;
+  start_date?: string;
+  estimate_point?: number | null;
+  parent?: string | null;
+  labels?: string[];
+  created_at?: string;
 }
 
 interface MyDayDashboardProps {
   issues: Issue[];
   states: PlaneStateLike[];
+  memberMap: Map<string, string>;
   currentUserId: string | null;
   activeProjectKey: string | null;
   onRefreshNeeded?: () => void;
 }
 
-export function MyDayDashboard({ issues, states, currentUserId, activeProjectKey, onRefreshNeeded }: MyDayDashboardProps) {
+export function MyDayDashboard({ issues, states, memberMap, currentUserId, activeProjectKey, onRefreshNeeded }: MyDayDashboardProps) {
+  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const selectedIssue = selectedIssueId ? issues.find(i => i.id === selectedIssueId) || null : null;
   const { metrics, dueTodayIssues, overdueIssues, blockedIssues, activeIssues } = useMemo(
     () => computeMyDayBuckets(issues, states, currentUserId),
     [issues, states, currentUserId]
@@ -101,12 +111,18 @@ export function MyDayDashboard({ issues, states, currentUserId, activeProjectKey
   }
 
   return (
-    <div className="p-6 overflow-y-auto h-full scrollbar-thin">
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="p-4 overflow-y-auto h-full scrollbar-thin space-y-3">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-[#FAFAFA]">My Day & Workstation</h2>
-          <p className="text-xs text-[#71717A] mt-1">
-            Task Workstation for <span className="font-mono text-blue-400">{activeProjectKey || 'All Projects'}</span> — interactive management & AI assistance.
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-[#FAFAFA]">My Day & Workstation</h2>
+            <span className="text-[10px] font-mono font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full">
+              Live
+            </span>
+          </div>
+          <p className="text-[11px] text-[#71717A] mt-0.5">
+            Workstation for <span className="font-mono text-blue-400">{activeProjectKey || 'All Projects'}</span>
           </p>
         </div>
       </div>
@@ -124,42 +140,48 @@ export function MyDayDashboard({ issues, states, currentUserId, activeProjectKey
         onTaskCreated={handleTaskUpdated}
       />
 
-      {/* Top Metrics Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+      {/* Top Metrics Strip */}
+      <div className="grid grid-cols-4 gap-2">
         {cards.map(card => {
           const Icon = card.icon;
           return (
-            <div key={card.label} className="p-4 rounded-xl bg-[#111113] border border-white/5">
-              <div className={`w-8 h-8 rounded-lg border flex items-center justify-center mb-3 ${card.color}`}>
-                <Icon className="w-4 h-4" />
+            <div key={card.label} className="p-2.5 rounded-lg bg-[#111113] border border-white/5 flex items-center gap-2.5">
+              <div className={`w-7 h-7 rounded-lg border flex items-center justify-center shrink-0 ${card.color}`}>
+                <Icon className="w-3.5 h-3.5" />
               </div>
-              <div className="text-2xl font-semibold text-[#FAFAFA]">{card.value}</div>
-              <div className="text-xs text-[#71717A] mt-0.5">{card.label}</div>
+              <div className="min-w-0">
+                <div className="text-lg font-semibold text-[#FAFAFA] leading-tight">{card.value}</div>
+                <div className="text-[10px] text-[#71717A] truncate">{card.label}</div>
+              </div>
             </div>
           );
         })}
       </div>
 
-      {/* Weekly Velocity & Inbox Triage Side-by-Side */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Weekly Velocity & Inbox Triage — single column */}
+      <div className="space-y-3">
         <WeeklyPerformanceWidget activeProjectId={activeProjectKey} />
         <InboxTriageWidget activeProjectKey={activeProjectKey} onTaskConverted={handleTaskUpdated} />
       </div>
 
       {/* Claimable Ticket Pool Section */}
       {unassignedTickets.length > 0 && (
-        <div className="mb-6 p-4 rounded-2xl bg-blue-950/20 border border-blue-500/30">
-          <div className="flex items-center justify-between mb-3">
+        <div className="p-3 rounded-xl bg-blue-950/20 border border-blue-500/30">
+          <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 text-xs font-semibold text-blue-400">
-              <Ticket className="w-4 h-4" />
-              <span>🎟️ Unassigned Ticket Pool ({unassignedTickets.length})</span>
+              <Ticket className="w-3.5 h-3.5" />
+              <span>Unassigned Ticket Pool ({unassignedTickets.length})</span>
             </div>
-            <span className="text-[10px] font-mono text-[#71717A]">Ready to claim across projects</span>
+            <span className="text-[10px] font-mono text-[#71717A] hidden sm:inline">Ready to claim across projects</span>
           </div>
 
-          <div className="space-y-2 max-h-60 overflow-y-auto pr-1 scrollbar-thin">
+          <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1 scrollbar-thin">
             {unassignedTickets.slice(0, 5).map(ticket => (
-              <div key={ticket.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl bg-[#111113] border border-white/10 hover:border-blue-500/40 transition-all gap-2">
+              <div
+                key={ticket.id}
+                onClick={() => setSelectedIssueId(ticket.id)}
+                className="flex flex-col sm:flex-row sm:items-center justify-between p-2 rounded-lg bg-[#111113] border border-white/10 hover:border-blue-500/40 transition-all gap-2 cursor-pointer"
+              >
                 <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
                   <span className="text-[11px] font-mono font-semibold text-blue-400 shrink-0 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
                     {ticket.project_detail?.identifier || activeProjectKey || 'TASK'}-{ticket.sequence_id || ''}
@@ -168,11 +190,11 @@ export function MyDayDashboard({ issues, states, currentUserId, activeProjectKey
                 </div>
 
                 <button
-                  onClick={() => handleClaimTicket(ticket)}
-                  className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium flex items-center justify-center gap-1.5 shrink-0 transition-colors shadow-sm"
+                  onClick={(e) => { e.stopPropagation(); handleClaimTicket(ticket); }}
+                  className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-[11px] font-medium flex items-center justify-center gap-1.5 shrink-0 transition-colors shadow-sm"
                 >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>Claim Task</span>
+                  <Check className="w-3 h-3" />
+                  <span>Claim</span>
                 </button>
               </div>
             ))}
@@ -182,9 +204,9 @@ export function MyDayDashboard({ issues, states, currentUserId, activeProjectKey
 
       {/* Stale or Blocked Work */}
       {staleOrBlockedList.length > 0 && (
-        <div className="mb-6 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20">
-          <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 mb-2">
-            <Clock className="w-4 h-4" />
+        <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+          <div className="flex items-center gap-2 text-xs font-semibold text-amber-400 mb-1.5">
+            <Clock className="w-3.5 h-3.5" />
             <span>Stale or Blocked Work Detected ({staleOrBlockedList.length})</span>
           </div>
           <div className="space-y-1">
@@ -201,15 +223,19 @@ export function MyDayDashboard({ issues, states, currentUserId, activeProjectKey
       )}
 
       {/* Recommended Next */}
-      <div className="mb-6">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[#71717A] mb-2">Recommended Next</h3>
+      <div>
+        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-[#71717A] mb-1.5">Recommended Next</h3>
         {recommended.length === 0 ? (
           <p className="text-xs text-[#52525B] px-1">Nothing active to work on.</p>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {recommended.map((issue, i) => (
-              <div key={issue.id} className="flex items-center justify-between p-2.5 rounded-lg bg-[#111113] border border-white/5 hover:border-white/10 transition-colors">
-                <div className="flex items-center gap-3 overflow-hidden min-w-0">
+              <div
+                key={issue.id}
+                onClick={() => setSelectedIssueId(issue.id)}
+                className="flex items-center justify-between p-2 rounded-lg bg-[#111113] border border-white/5 hover:border-white/10 hover:border-blue-500/30 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
                   <Flame className={`w-3.5 h-3.5 shrink-0 ${i === 0 ? 'text-orange-400' : 'text-[#52525B]'}`} />
                   <span className="text-xs text-[#71717A] font-mono shrink-0">
                     {issue.project_detail?.identifier || activeProjectKey}-{issue.sequence_id}
@@ -222,7 +248,7 @@ export function MyDayDashboard({ issues, states, currentUserId, activeProjectKey
         )}
       </div>
 
-      {/* Interactive Buckets */}
+      {/* Interactive Buckets — single column */}
       <InteractiveIssueBucket
         title="Due Today"
         issues={dueTodayIssues}
@@ -230,6 +256,7 @@ export function MyDayDashboard({ issues, states, currentUserId, activeProjectKey
         states={states}
         emptyText="Nothing due today."
         onTaskUpdated={handleTaskUpdated}
+        onSelectIssue={(id) => setSelectedIssueId(id)}
       />
       <InteractiveIssueBucket
         title="Overdue"
@@ -238,6 +265,7 @@ export function MyDayDashboard({ issues, states, currentUserId, activeProjectKey
         states={states}
         emptyText="Nothing overdue."
         onTaskUpdated={handleTaskUpdated}
+        onSelectIssue={(id) => setSelectedIssueId(id)}
       />
       <InteractiveIssueBucket
         title="Blocked"
@@ -246,7 +274,23 @@ export function MyDayDashboard({ issues, states, currentUserId, activeProjectKey
         states={states}
         emptyText="Nothing blocked."
         onTaskUpdated={handleTaskUpdated}
+        onSelectIssue={(id) => setSelectedIssueId(id)}
       />
+
+      {/* Work Item Detail Drawer / Modal */}
+      {selectedIssue && (
+        <WorkItemDetailPanel
+          issue={selectedIssue}
+          allIssues={issues}
+          states={states}
+          memberMap={memberMap}
+          activeProjectKey={activeProjectKey}
+          currentUserId={currentUserId}
+          onClose={() => setSelectedIssueId(null)}
+          onOpenIssue={(id) => setSelectedIssueId(id)}
+          onChanged={handleTaskUpdated}
+        />
+      )}
     </div>
   );
 }
@@ -258,6 +302,7 @@ function InteractiveIssueBucket({
   states,
   emptyText,
   onTaskUpdated,
+  onSelectIssue,
 }: {
   title: string;
   issues: Issue[];
@@ -265,6 +310,7 @@ function InteractiveIssueBucket({
   states: PlaneStateLike[];
   emptyText: string;
   onTaskUpdated: () => void;
+  onSelectIssue?: (issueId: string) => void;
 }) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -316,9 +362,9 @@ function InteractiveIssueBucket({
   };
 
   return (
-    <div className="mb-6">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[#71717A]">{title}</h3>
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-[#71717A]">{title}</h3>
         <span className="text-[10px] font-mono text-[#52525B] bg-[#111113] px-2 py-0.5 rounded border border-white/5">
           {issues.length}
         </span>
@@ -327,15 +373,19 @@ function InteractiveIssueBucket({
       {issues.length === 0 ? (
         <p className="text-xs text-[#52525B] px-1">{emptyText}</p>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {issues.map(issue => {
             const key = `${issue.project_detail?.identifier || activeProjectKey || 'TASK'}-${issue.sequence_id || ''}`;
             return (
-              <div key={issue.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl bg-[#111113] border border-white/5 hover:border-white/10 transition-all gap-2">
+              <div
+                key={issue.id}
+                onClick={() => onSelectIssue?.(issue.id)}
+                className="flex flex-col sm:flex-row sm:items-center justify-between p-2 rounded-lg bg-[#111113] border border-white/5 hover:border-white/10 hover:border-blue-500/30 transition-all gap-2 cursor-pointer"
+              >
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   {/* Mark Done Button */}
                   <button
-                    onClick={() => handleMarkDone(issue)}
+                    onClick={(e) => { e.stopPropagation(); handleMarkDone(issue); }}
                     title="Mark Done"
                     className="w-5 h-5 rounded-full border border-white/20 hover:border-green-400 hover:bg-green-500/20 text-[#71717A] hover:text-green-400 flex items-center justify-center transition-colors shrink-0"
                   >
@@ -350,6 +400,7 @@ function InteractiveIssueBucket({
                   {/* Inline Priority Selector */}
                   <select
                     value={issue.priority || 'none'}
+                    onClick={(e) => e.stopPropagation()}
                     onChange={(e) => handlePriorityChange(issue, e.target.value)}
                     className="bg-[#18181B] border border-white/10 text-[10px] text-[#A1A1AA] rounded px-2 py-0.5 outline-none font-mono capitalize"
                   >
@@ -362,7 +413,7 @@ function InteractiveIssueBucket({
 
                   {/* Copy Git Branch Button */}
                   <button
-                    onClick={() => handleCopyGitBranch(issue)}
+                    onClick={(e) => { e.stopPropagation(); handleCopyGitBranch(issue); }}
                     title="Copy Git Branch Name"
                     className="p-1.5 rounded bg-[#18181B] border border-white/10 hover:border-blue-500/40 text-[#71717A] hover:text-blue-400 transition-colors flex items-center gap-1 text-[10px]"
                   >

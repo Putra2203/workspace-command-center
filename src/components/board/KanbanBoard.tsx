@@ -42,6 +42,7 @@ interface KanbanBoardProps {
   onMoveIssue: (issueId: string, newStateId: string) => void;
   /** Applies a confirmed bulk-priority ActionPlan; receives (issueId, newPriority) pairs */
   onBulkUpdatePriority?: (updates: { issueId: string; priority: string }[]) => Promise<void>;
+  onSelectIssue?: (issueId: string) => void;
 }
 
 interface ColumnProps {
@@ -49,9 +50,10 @@ interface ColumnProps {
   issues: Issue[];
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
+  onSelectIssue?: (id: string) => void;
 }
 
-function Column({ state, issues, selectedIds, onToggleSelect }: ColumnProps) {
+function Column({ state, issues, selectedIds, onToggleSelect, onSelectIssue }: ColumnProps) {
   const { setNodeRef } = useSortable({
     id: state.id,
     data: { type: 'Column', state }
@@ -76,6 +78,7 @@ function Column({ state, issues, selectedIds, onToggleSelect }: ColumnProps) {
                 issue={issue}
                 selected={selectedIds.has(issue.id)}
                 onToggleSelect={onToggleSelect}
+                onSelect={onSelectIssue}
               />
             ))
           ) : (
@@ -91,7 +94,7 @@ function Column({ state, issues, selectedIds, onToggleSelect }: ColumnProps) {
 
 const BULK_PRIORITIES = ['urgent', 'high', 'medium', 'low', 'none'] as const;
 
-export function KanbanBoard({ states, issues: initialIssues, onMoveIssue, onBulkUpdatePriority }: KanbanBoardProps) {
+export function KanbanBoard({ states, issues: initialIssues, onMoveIssue, onBulkUpdatePriority, onSelectIssue }: KanbanBoardProps) {
   const [issues, setIssues] = useState<Issue[]>(initialIssues);
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -212,7 +215,7 @@ export function KanbanBoard({ states, issues: initialIssues, onMoveIssue, onBulk
       >
         <div className="flex h-full gap-px">
           {columns.map((col) => (
-            <Column key={col.id} state={col} issues={col.issues} selectedIds={selectedIds} onToggleSelect={toggleSelect} />
+            <Column key={col.id} state={col} issues={col.issues} selectedIds={selectedIds} onToggleSelect={toggleSelect} onSelectIssue={onSelectIssue} />
           ))}
         </div>
 

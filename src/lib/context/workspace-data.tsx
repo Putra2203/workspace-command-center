@@ -20,6 +20,15 @@ export interface Issue {
   priority: string;
   assignees?: string[];
   project_detail?: { identifier: string };
+  description_html?: string;
+  start_date?: string;
+  target_date?: string;
+  estimate_point?: number | null;
+  parent?: string | null;
+  labels?: string[];
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string;
 }
 
 export interface PlaneState {

@@ -49,7 +49,7 @@ export function QuickTaskCapture({ activeProjectKey, onTaskCreated }: QuickTaskC
   };
 
   return (
-    <form onSubmit={handleSubmit} className="mb-6 flex items-center gap-2 bg-[#111113] border border-white/10 p-2 rounded-xl focus-within:border-blue-500/50 transition-colors">
+    <form onSubmit={handleSubmit} className="flex items-center gap-2 bg-[#111113] border border-white/10 p-1.5 rounded-xl focus-within:border-blue-500/50 transition-colors">
       <input
         type="text"
         value={title}

@@ -101,10 +101,10 @@ export function InboxTriageWidget({ activeProjectKey, onTaskConverted }: InboxTr
   };
 
   return (
-    <div className="mb-6 p-4 rounded-xl bg-[#111113] border border-white/5 space-y-3">
+    <div className="p-3 rounded-xl bg-[#111113] border border-white/5 space-y-2">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-semibold text-[#FAFAFA]">
-          <Inbox className="w-4 h-4 text-blue-400" />
+          <Inbox className="w-3.5 h-3.5 text-blue-400" />
           <span>Quick Thought Capture & AI Triage ({items.length})</span>
         </div>
       </div>
@@ -114,7 +114,7 @@ export function InboxTriageWidget({ activeProjectKey, onTaskConverted }: InboxTr
           type="text"
           value={rawText}
           onChange={(e) => setRawText(e.target.value)}
-          placeholder="Dump a quick thought/note... (e.g. Need to update OAuth secrets next week)"
+          placeholder="Dump a quick thought/note..."
           className="flex-1 bg-[#18181B] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-[#FAFAFA] placeholder-[#71717A] outline-none"
         />
         <button
@@ -128,9 +128,9 @@ export function InboxTriageWidget({ activeProjectKey, onTaskConverted }: InboxTr
       </form>
 
       {items.length > 0 && (
-        <div className="space-y-2 pt-1">
+        <div className="space-y-1.5">
           {items.slice(0, 3).map((item) => (
-            <div key={item.id} className="p-2.5 rounded-lg bg-[#18181B] border border-white/5 flex items-center justify-between gap-2 text-xs">
+            <div key={item.id} className="p-2 rounded-lg bg-[#18181B] border border-white/5 flex items-center justify-between gap-2 text-xs">
               <span className="text-[#FAFAFA] truncate flex-1">{item.rawText}</span>
               <button
                 onClick={() => handleTriage(item)}
@@ -142,7 +142,7 @@ export function InboxTriageWidget({ activeProjectKey, onTaskConverted }: InboxTr
                 ) : (
                   <>
                     <Sparkles className="w-3 h-3" />
-                    <span>AI Triage to Task</span>
+                    <span>AI Triage</span>
                   </>
                 )}
               </button>
