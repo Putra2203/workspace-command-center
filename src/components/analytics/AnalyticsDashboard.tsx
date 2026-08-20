@@ -180,21 +180,24 @@ export function AnalyticsDashboard({
   // 4. Cross-Project Workload Breakdown Chart Data (When ALL projects is active)
   const crossProjectChartData = useMemo(() => {
     if (activeProjectKey !== 'ALL' || projects.length === 0) return [];
-    return projects.map((p) => {
-      const projIssues = issues.filter(
-        (i) => i.project_detail?.identifier === p.identifier || i.project === p.id
-      );
-      const projHealth = calculateProjectHealth(projIssues, states);
-      return {
-        identifier: p.identifier,
-        name: p.name,
-        completed: projHealth.completedIssues,
-        inProgress: projHealth.inProgressIssues,
-        unstarted: projHealth.unstartedIssues,
-        overdue: projHealth.overdueCount,
-        total: projHealth.totalIssues,
-      };
-    });
+    return projects
+      .map((p) => {
+        const projIssues = issues.filter(
+          (i) => i.project_detail?.identifier === p.identifier || i.project === p.id
+        );
+        const projHealth = calculateProjectHealth(projIssues, states);
+        return {
+          identifier: p.identifier,
+          name: p.name,
+          completed: projHealth.completedIssues,
+          inProgress: projHealth.inProgressIssues,
+          unstarted: projHealth.unstartedIssues,
+          overdue: projHealth.overdueCount,
+          total: projHealth.totalIssues,
+        };
+      })
+      .filter((p) => p.total > 0)
+      .sort((a, b) => b.total - a.total);
   }, [activeProjectKey, projects, issues, states]);
 
   return (
@@ -474,44 +477,72 @@ export function AnalyticsDashboard({
         </div>
       </div>
 
-      {/* CHART 3: Cross-Project Workload Stacked Chart (When ALL projects is active) */}
+      {/* CHART 3: Cross-Project Workload Horizontal Stacked Chart (When ALL projects is active) */}
       {activeProjectKey === 'ALL' && crossProjectChartData.length > 0 && (
         <div className="p-5 rounded-2xl bg-[#111113] border border-white/5 space-y-4">
           <div className="flex items-center justify-between border-b border-white/5 pb-3">
             <h3 className="text-sm font-semibold text-[#FAFAFA] flex items-center gap-2">
               <Layers className="w-4 h-4 text-blue-400" />
-              <span>Cross-Project Workload & Throughput Comparison</span>
+              <span>Cross-Project Workload Comparison</span>
             </h3>
-            <span className="text-xs font-mono text-blue-400">
+            <span className="text-[10px] font-mono font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full whitespace-nowrap">
               {crossProjectChartData.length} Projects
             </span>
           </div>
 
-          <div className="h-72 w-full">
+          {/* Clean HTML Legend (Zero SVG overlap) */}
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs text-[#A1A1AA] pt-1">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-xs bg-[#10b981]" />
+              <span>Completed</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-xs bg-[#3b82f6]" />
+              <span>In Progress</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-xs bg-[#f59e0b]" />
+              <span>Unstarted</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-xs bg-[#f43f5e]" />
+              <span>Overdue</span>
+            </div>
+          </div>
+
+          <div
+            className="w-full"
+            style={{ height: `${Math.max(220, crossProjectChartData.length * 48)}px` }}
+          >
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={crossProjectChartData} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
+              <BarChart
+                layout="vertical"
+                data={crossProjectChartData}
+                margin={{ top: 10, right: 15, left: 10, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" horizontal={false} />
                 <XAxis
-                  dataKey="identifier"
+                  type="number"
                   stroke="#71717a"
-                  fontSize={10}
+                  fontSize={11}
                   tickLine={false}
                   axisLine={false}
-                  angle={-30}
-                  textAnchor="end"
+                  allowDecimals={false}
                 />
-                <YAxis stroke="#71717a" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                <YAxis
+                  type="category"
+                  dataKey="identifier"
+                  stroke="#71717a"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  width={95}
+                />
                 <Tooltip content={<CustomChartTooltip />} />
-                <Legend
-                  verticalAlign="top"
-                  height={36}
-                  iconType="circle"
-                  formatter={(value) => <span className="text-xs text-[#A1A1AA] capitalize">{value}</span>}
-                />
                 <Bar dataKey="completed" name="Completed" stackId="a" fill="#10b981" />
                 <Bar dataKey="inProgress" name="In Progress" stackId="a" fill="#3b82f6" />
                 <Bar dataKey="unstarted" name="Unstarted" stackId="a" fill="#f59e0b" />
-                <Bar dataKey="overdue" name="Overdue" stackId="a" fill="#f43f5e" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="overdue" name="Overdue" stackId="a" fill="#f43f5e" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
