@@ -124,18 +124,16 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="p-4 rounded-xl border border-violet-500/30 bg-violet-950/[0.08] shadow-[0_0_25px_rgba(139,92,246,0.06)] my-3 w-full space-y-3"
+      className="p-3.5 sm:p-4 rounded-xl border border-violet-500/30 bg-violet-950/[0.08] shadow-[0_0_25px_rgba(139,92,246,0.06)] my-3 w-full space-y-3"
     >
-      {/* Workflow Phase Indicator (v2 Lifecycle) */}
+      {/* Workflow Phase Indicator */}
       <div className="flex items-center justify-between text-[9px] font-mono text-[#71717A] border-b border-violet-500/20 pb-2">
         <span className="flex items-center gap-1 text-violet-300 font-semibold">
           <Sparkles className="w-3 h-3 text-violet-400" />
           PROPOSED MISSION PLAN
         </span>
-        <div className="flex items-center gap-1.5 overflow-x-auto">
-          <span className="text-violet-400">● ANALYZE</span>
-          <span>─</span>
-          <span className="text-violet-400">● PLAN</span>
+        <div className="flex items-center gap-1 overflow-x-auto text-[8px] sm:text-[9px]">
+          <span className="text-violet-400 font-bold">● PLAN</span>
           <span>─</span>
           <span className={isExecuting ? 'text-violet-400 font-bold animate-pulse' : 'text-violet-300 font-bold'}>
             ● REVIEW
@@ -144,15 +142,13 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
           <span className={isExecuting ? 'text-cyan-400 font-bold animate-pulse' : 'text-[#52525B]'}>
             ○ EXECUTE
           </span>
-          <span>─</span>
-          <span className="text-[#52525B]">○ VERIFY</span>
         </div>
       </div>
 
       {/* Plan Summary Header */}
-      <div className="flex items-start justify-between gap-3 pt-1">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 pt-1">
         <div className="space-y-1">
-          <div className="text-xs font-semibold text-[#FAFAFA]">{activePlan.summary}</div>
+          <div className="text-xs sm:text-sm font-semibold text-[#FAFAFA] leading-snug">{activePlan.summary}</div>
           <div className="flex items-center gap-2">
             <span className={`text-[9px] font-mono px-2 py-0.5 rounded border font-semibold flex items-center gap-1.5 ${riskInfo.class}`}>
               <span>{riskInfo.dots}</span>
@@ -161,7 +157,7 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 self-start sm:self-auto">
           <button
             onClick={() => {
               setIsEditing(!isEditing);
@@ -192,7 +188,7 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
               isEditing ? 'border-violet-500/30' : 'border-white/[0.06]'
             }`}
           >
-            <div className="flex items-center justify-between font-mono">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 font-mono">
               <span className="text-violet-300 font-semibold text-[11px] flex items-center gap-1.5">
                 <span className="text-[#52525B]">0{idx + 1}</span>
                 <span>{step.operation}</span>
@@ -202,10 +198,10 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
                   type="text"
                   value={step.target}
                   onChange={(e) => handleStepChange(idx, 'target', e.target.value)}
-                  className="text-[#FAFAFA] bg-[#10151C] px-2 py-0.5 rounded border border-violet-500/30 outline-none focus:border-violet-500 text-xs font-mono w-40"
+                  className="text-[#FAFAFA] bg-[#10151C] px-2 py-1 rounded border border-violet-500/30 outline-none focus:border-violet-500 text-xs font-mono w-full sm:w-40"
                 />
               ) : (
-                <span className="text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 text-[10px]">
+                <span className="text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 text-[10px] w-fit">
                   {step.target}
                 </span>
               )}
@@ -226,7 +222,7 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
                         type="text"
                         value={String(v)}
                         onChange={(e) => handleStepChange(idx, `changes.${k}`, e.target.value)}
-                        className="text-[#FAFAFA] bg-[#05070A] px-1.5 py-0.5 rounded border border-violet-500/30 outline-none text-xs w-full mt-0.5"
+                        className="text-[#FAFAFA] bg-[#05070A] px-1.5 py-1 rounded border border-violet-500/30 outline-none text-xs w-full mt-0.5"
                       />
                     ) : (
                       <span className="text-[#FAFAFA] font-medium block truncate mt-0.5">
@@ -253,19 +249,19 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
         <button
           onClick={handleCancelClick}
           disabled={isExecuting}
-          className="px-3 py-1.5 rounded-lg border border-white/[0.08] hover:bg-white/[0.04] text-[#A1A1AA] hover:text-[#FAFAFA] text-xs font-mono font-medium transition-colors"
+          className="px-3.5 py-2 rounded-lg border border-white/[0.08] hover:bg-white/[0.04] text-[#A1A1AA] hover:text-[#FAFAFA] text-xs font-mono font-medium transition-colors min-h-[40px]"
         >
           Cancel
         </button>
         <button
           onClick={handleApprove}
           disabled={isExecuting}
-          className="px-4 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-mono font-medium flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(139,92,246,0.3)] disabled:opacity-50"
+          className="px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-mono font-medium flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(139,92,246,0.3)] disabled:opacity-50 min-h-[40px]"
         >
           {isExecuting ? (
             <>
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>Executing & Verifying...</span>
+              <span>Executing...</span>
             </>
           ) : (
             <>
@@ -310,16 +306,16 @@ export function ActionCard({ data, onOpenIssue, onSelectOption }: ActionCardProp
     const projectId = data.data?.projectId || 'ALL';
 
     return (
-      <div className="p-4 rounded-xl bg-[#070A0E] border border-cyan-500/20 shadow-[0_0_20px_rgba(56,189,248,0.04)] my-3 space-y-3">
-        <div className="flex items-center justify-between border-b border-white/[0.06] pb-2.5">
+      <div className="p-3 sm:p-4 rounded-xl bg-[#070A0E] border border-cyan-500/20 shadow-[0_0_20px_rgba(56,189,248,0.04)] my-2 sm:my-3 space-y-2.5 sm:space-y-3">
+        <div className="flex items-center justify-between border-b border-white/[0.06] pb-2">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
             <span className="text-xs font-mono font-bold text-cyan-400">
               {data.title || `Task Queue (${items.length})`}
             </span>
           </div>
-          <span className="text-[10px] font-mono text-[#71717A]">
-            0-TOKEN ACTIVE HUD
+          <span className="text-[9px] sm:text-[10px] font-mono text-[#71717A]">
+            0-TOKEN HUD
           </span>
         </div>
 
@@ -345,63 +341,61 @@ export function ActionCard({ data, onOpenIssue, onSelectOption }: ActionCardProp
               return (
                 <div
                   key={item.id || idx}
-                  className={`p-3 rounded-lg border transition-all ${
+                  className={`p-3 rounded-lg border transition-all space-y-2 ${
                     isDone
                       ? 'bg-emerald-950/10 border-emerald-500/20 opacity-75'
                       : 'bg-[#0B0F14] hover:bg-[#10151C] border-white/[0.06] hover:border-cyan-500/30'
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-1 flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => onOpenIssue?.(item.key, projectId)}
-                          className="text-[11px] font-mono font-bold text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-0.5"
-                        >
-                          <span>{item.key}</span>
-                          <ArrowUpRight className="w-3 h-3 opacity-60" />
-                        </button>
-                        <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border font-semibold ${getPrioColor(item.priority)}`}>
-                          {item.priority || 'none'}
-                        </span>
-                        <span className="text-[9px] font-mono text-[#71717A] truncate">
-                          • {item.assignee || 'Unassigned'}
-                        </span>
-                      </div>
-                      <div className={`text-xs font-medium truncate ${isDone ? 'line-through text-[#71717A]' : 'text-[#FAFAFA]'}`}>
-                        {item.title}
-                      </div>
-                    </div>
-
-                    {/* Quick Inline Actions (0 Tokens) */}
-                    <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button
                         onClick={() => onOpenIssue?.(item.key, projectId)}
-                        className="px-2 py-1 rounded bg-[#10151C] hover:bg-[#18202B] border border-white/[0.08] text-[10px] font-mono text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                        className="text-[11px] font-mono font-bold text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-0.5"
                       >
-                        Inspect
+                        <span>{item.key}</span>
+                        <ArrowUpRight className="w-3 h-3 opacity-60" />
                       </button>
-                      <button
-                        onClick={() => handleQuickComplete(item.key, projectId)}
-                        disabled={isDone || isLoading}
-                        className={`px-2 py-1 rounded border text-[10px] font-mono font-medium flex items-center gap-1 transition-colors ${
-                          isDone
-                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default'
-                            : 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
-                        }`}
-                      >
-                        {isLoading ? (
-                          <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
-                        ) : isDone ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-400" />
-                            <span>Done</span>
-                          </>
-                        ) : (
-                          <span>Complete</span>
-                        )}
-                      </button>
+                      <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border font-semibold ${getPrioColor(item.priority)}`}>
+                        {item.priority || 'none'}
+                      </span>
+                      <span className="text-[9px] font-mono text-[#71717A] truncate">
+                        • {item.assignee || 'Unassigned'}
+                      </span>
                     </div>
+                    <div className={`text-xs font-medium ${isDone ? 'line-through text-[#71717A]' : 'text-[#FAFAFA]'}`}>
+                      {item.title}
+                    </div>
+                  </div>
+
+                  {/* Quick Inline Actions (0 Tokens) */}
+                  <div className="flex items-center gap-2 pt-1 border-t border-white/[0.04]">
+                    <button
+                      onClick={() => onOpenIssue?.(item.key, projectId)}
+                      className="flex-1 sm:flex-initial px-3 py-1.5 rounded-lg bg-[#10151C] hover:bg-[#18202B] border border-white/[0.08] text-[11px] font-mono text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors text-center min-h-[36px] flex items-center justify-center"
+                    >
+                      Inspect
+                    </button>
+                    <button
+                      onClick={() => handleQuickComplete(item.key, projectId)}
+                      disabled={isDone || isLoading}
+                      className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg border text-[11px] font-mono font-medium flex items-center justify-center gap-1.5 transition-colors min-h-[36px] ${
+                        isDone
+                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default'
+                          : 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
+                      }`}
+                    >
+                      {isLoading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                      ) : isDone ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Done</span>
+                        </>
+                      ) : (
+                        <span>Complete</span>
+                      )}
+                    </button>
                   </div>
                 </div>
               );
@@ -428,7 +422,7 @@ export function ActionCard({ data, onOpenIssue, onSelectOption }: ActionCardProp
               <button
                 key={i}
                 onClick={() => onSelectOption?.(opt)}
-                className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-mono transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-mono transition-colors min-h-[36px] flex items-center"
               >
                 {opt.label || opt.value}
               </button>

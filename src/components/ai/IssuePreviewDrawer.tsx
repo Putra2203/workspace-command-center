@@ -89,46 +89,52 @@ export function IssuePreviewDrawer({
   return (
     <AnimatePresence>
       {isOpen && (
-        <>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-stretch sm:justify-end">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 transition-opacity"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 transition-opacity"
           />
 
-          {/* Drawer Panel */}
+          {/* Drawer / Bottom Sheet Container */}
           <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-0 right-0 bottom-0 w-full sm:w-[460px] bg-[#070A0E] border-l border-white/[0.08] shadow-2xl z-50 flex flex-col overflow-hidden"
+            initial={{ y: '100%', opacity: 0.8 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: '100%', opacity: 0 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+            className="relative z-50 w-full sm:w-[460px] max-h-[85vh] sm:max-h-full sm:h-full bg-[#070A0E] border-t sm:border-t-0 sm:border-l border-white/[0.10] rounded-t-3xl sm:rounded-none shadow-2xl flex flex-col overflow-hidden pb-[max(1rem,env(safe-area-inset-bottom))]"
           >
+            {/* Mobile Drag Indicator */}
+            <div className="pt-3 pb-1 flex justify-center sm:hidden">
+              <div className="w-10 h-1 bg-white/20 rounded-full" />
+            </div>
+
             {/* Drawer Header */}
-            <div className="p-4 border-b border-white/[0.08] flex items-center justify-between bg-[#0B0F14]/80 backdrop-blur">
+            <div className="px-4 py-3 sm:p-4 border-b border-white/[0.08] flex items-center justify-between bg-[#0B0F14]/80 backdrop-blur">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
                   {issueKey}
                 </span>
-                <span className="text-xs font-mono text-[#71717A]">
+                <span className="text-[11px] sm:text-xs font-mono text-[#71717A]">
                   TASK HUD PREVIEW
                 </span>
               </div>
               <button
                 onClick={onClose}
-                className="p-1.5 rounded-lg hover:bg-white/[0.06] text-[#71717A] hover:text-[#FAFAFA] transition-colors"
+                className="w-8 h-8 rounded-lg hover:bg-white/[0.06] text-[#71717A] hover:text-[#FAFAFA] flex items-center justify-center transition-colors"
+                aria-label="Close"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Drawer Content */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 sm:space-y-5 scrollbar-thin">
               {isLoading ? (
-                <div className="h-64 flex flex-col items-center justify-center gap-2 text-[#71717A] font-mono text-xs">
+                <div className="h-48 sm:h-64 flex flex-col items-center justify-center gap-2 text-[#71717A] font-mono text-xs">
                   <Loader2 className="w-5 h-5 animate-spin text-cyan-400" />
                   <span>RETRIEVING TASK TELEMETRY...</span>
                 </div>
@@ -140,8 +146,8 @@ export function IssuePreviewDrawer({
               ) : issue ? (
                 <>
                   {/* Title & Status Bar */}
-                  <div className="space-y-3">
-                    <h2 className="text-base font-semibold text-[#FAFAFA] leading-snug">
+                  <div className="space-y-2.5">
+                    <h2 className="text-sm sm:text-base font-semibold text-[#FAFAFA] leading-snug">
                       {issue.name}
                     </h2>
 
@@ -173,7 +179,7 @@ export function IssuePreviewDrawer({
                     <label className="text-[10px] font-mono uppercase tracking-wider text-[#71717A]">
                       Description
                     </label>
-                    <div className="p-3.5 rounded-xl bg-[#0B0F14] border border-white/[0.06] text-xs text-[#D4D4D8] leading-relaxed max-h-48 overflow-y-auto whitespace-pre-wrap">
+                    <div className="p-3 sm:p-3.5 rounded-xl bg-[#0B0F14] border border-white/[0.06] text-xs text-[#D4D4D8] leading-relaxed max-h-40 sm:max-h-48 overflow-y-auto whitespace-pre-wrap">
                       {issue.description_stripped || issue.description || 'No description provided for this task.'}
                     </div>
                   </div>
@@ -187,17 +193,17 @@ export function IssuePreviewDrawer({
                       <button
                         onClick={() => handleUpdateStatus('Done')}
                         disabled={isUpdating}
-                        className="p-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-medium flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                        className="p-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs font-mono font-medium flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 min-h-[44px]"
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                         <span>Mark as Done</span>
                       </button>
                       <button
                         onClick={() => handleUpdateStatus('In Progress')}
                         disabled={isUpdating}
-                        className="p-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-mono font-medium flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+                        className="p-2.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-mono font-medium flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 min-h-[44px]"
                       >
-                        <Clock className="w-3.5 h-3.5 text-cyan-400" />
+                        <Clock className="w-4 h-4 text-cyan-400" />
                         <span>Start Work</span>
                       </button>
                     </div>
@@ -207,19 +213,19 @@ export function IssuePreviewDrawer({
             </div>
 
             {/* Drawer Footer */}
-            <div className="p-4 border-t border-white/[0.08] bg-[#0B0F14]/80 flex items-center justify-between">
+            <div className="px-4 py-3 sm:p-4 border-t border-white/[0.08] bg-[#0B0F14]/80 flex items-center justify-between">
               <span className="text-[10px] font-mono text-[#52525B]">
                 PLANE SYNC READY
               </span>
               <button
                 onClick={onClose}
-                className="px-3.5 py-1.5 rounded-lg border border-white/[0.08] hover:bg-white/[0.06] text-xs font-mono text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                className="px-4 py-2 rounded-lg border border-white/[0.08] hover:bg-white/[0.06] text-xs font-mono text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors min-h-[38px]"
               >
                 Close HUD
               </button>
             </div>
           </motion.div>
-        </>
+        </div>
       )}
     </AnimatePresence>
   );
