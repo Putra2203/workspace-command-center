@@ -246,17 +246,17 @@ export function AnalyticsDashboard({
         </div>
       </div>
 
-      {/* Top Metric Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Top Metric Cards Grid: Compact 2x2 on mobile, 4 in a row on desktop */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         {/* Completion Rate */}
-        <div className="p-4 rounded-2xl bg-[#111113] border border-white/5 space-y-2">
-          <div className="flex items-center justify-between text-xs text-[#71717A]">
-            <span>Completion Rate</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+        <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-[#111113] border border-white/5 space-y-1.5 sm:space-y-2">
+          <div className="flex items-center justify-between text-[11px] sm:text-xs text-[#71717A]">
+            <span className="truncate">Completion Rate</span>
+            <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-[#FAFAFA]">{metrics.completionRate}%</span>
-            <span className="text-xs text-[#71717A] font-mono">
+          <div className="flex items-baseline gap-1.5 sm:gap-2">
+            <span className="text-xl sm:text-2xl font-bold font-mono text-[#FAFAFA]">{metrics.completionRate}%</span>
+            <span className="text-[10px] sm:text-xs text-[#71717A] font-mono truncate">
               ({metrics.completedIssues}/{metrics.totalIssues})
             </span>
           </div>
@@ -269,48 +269,48 @@ export function AnalyticsDashboard({
         </div>
 
         {/* Active In Progress */}
-        <div className="p-4 rounded-2xl bg-[#111113] border border-white/5 space-y-2">
-          <div className="flex items-center justify-between text-xs text-[#71717A]">
-            <span>In Active Progress</span>
-            <TrendingUp className="w-4 h-4 text-blue-400" />
+        <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-[#111113] border border-white/5 space-y-1.5 sm:space-y-2">
+          <div className="flex items-center justify-between text-[11px] sm:text-xs text-[#71717A]">
+            <span className="truncate">In Progress</span>
+            <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-400 shrink-0" />
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-blue-400">{metrics.inProgressIssues}</span>
-            <span className="text-xs text-[#71717A]">work items</span>
+          <div className="flex items-baseline gap-1.5 sm:gap-2">
+            <span className="text-xl sm:text-2xl font-bold font-mono text-blue-400">{metrics.inProgressIssues}</span>
+            <span className="text-[10px] sm:text-xs text-[#71717A]">tasks</span>
           </div>
-          <p className="text-[11px] text-[#71717A]">Currently being executed by team</p>
+          <p className="text-[10px] sm:text-[11px] text-[#71717A] truncate hidden sm:block">Currently being executed</p>
         </div>
 
         {/* Overdue */}
-        <div className="p-4 rounded-2xl bg-[#111113] border border-white/5 space-y-2">
-          <div className="flex items-center justify-between text-xs text-[#71717A]">
-            <span>Overdue Tasks</span>
-            <Clock className="w-4 h-4 text-rose-400" />
+        <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-[#111113] border border-white/5 space-y-1.5 sm:space-y-2">
+          <div className="flex items-center justify-between text-[11px] sm:text-xs text-[#71717A]">
+            <span className="truncate">Overdue Tasks</span>
+            <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-rose-400 shrink-0" />
           </div>
-          <div className="flex items-baseline gap-2">
+          <div className="flex items-baseline gap-1.5 sm:gap-2">
             <span
-              className={`text-2xl font-bold font-mono ${
+              className={`text-xl sm:text-2xl font-bold font-mono ${
                 metrics.overdueCount > 0 ? 'text-rose-400' : 'text-[#FAFAFA]'
               }`}
             >
               {metrics.overdueCount}
             </span>
-            <span className="text-xs text-[#71717A]">tasks past due</span>
+            <span className="text-[10px] sm:text-xs text-[#71717A]">overdue</span>
           </div>
-          <p className="text-[11px] text-[#71717A]">Requires immediate scheduling</p>
+          <p className="text-[10px] sm:text-[11px] text-[#71717A] truncate hidden sm:block">Requires scheduling</p>
         </div>
 
         {/* Unassigned Pool */}
-        <div className="p-4 rounded-2xl bg-[#111113] border border-white/5 space-y-2">
-          <div className="flex items-center justify-between text-xs text-[#71717A]">
-            <span>Unassigned Tickets</span>
-            <UserX className="w-4 h-4 text-amber-400" />
+        <div className="p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-[#111113] border border-white/5 space-y-1.5 sm:space-y-2">
+          <div className="flex items-center justify-between text-[11px] sm:text-xs text-[#71717A]">
+            <span className="truncate">Unassigned</span>
+            <UserX className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400 shrink-0" />
           </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold font-mono text-amber-400">{metrics.unassignedCount}</span>
-            <span className="text-xs text-[#71717A]">claimable tickets</span>
+          <div className="flex items-baseline gap-1.5 sm:gap-2">
+            <span className="text-xl sm:text-2xl font-bold font-mono text-amber-400">{metrics.unassignedCount}</span>
+            <span className="text-[10px] sm:text-xs text-[#71717A]">claimable</span>
           </div>
-          <p className="text-[11px] text-[#71717A]">Available in Ticket Pool</p>
+          <p className="text-[10px] sm:text-[11px] text-[#71717A] truncate hidden sm:block">Available in Pool</p>
         </div>
       </div>
 
