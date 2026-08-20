@@ -200,48 +200,53 @@ export function AnalyticsDashboard({
   return (
     <div className="p-4 sm:p-6 overflow-y-auto h-full scrollbar-thin space-y-6 pb-20 md:pb-6">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-[#FAFAFA]">Project Health & Velocity Analytics</h2>
-            <span className="text-[10px] font-mono font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base sm:text-lg font-bold text-[#FAFAFA] tracking-tight">
+              Project Health & Velocity
+            </h2>
+            <span className="inline-flex items-center gap-1.5 text-[10px] font-mono font-semibold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded-full whitespace-nowrap shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
               Live Metrics
             </span>
           </div>
-          <p className="text-xs text-[#71717A] mt-1">
-            Analyzing operational health and task throughput for{' '}
+          <p className="text-xs text-[#71717A] mt-0.5">
+            Throughput & health metrics for{' '}
             <span className="font-mono text-blue-400 font-semibold">
               {activeProjectKey === 'ALL' ? 'All Workspace Projects' : activeProjectKey || 'Active Project'}
             </span>
           </p>
         </div>
 
-        {/* Health Score Pill */}
-        <div className="flex items-center gap-3 bg-[#111113] border border-white/10 px-4 py-2 rounded-2xl shadow-sm shrink-0">
-          <div className="text-right">
-            <div className="text-[10px] uppercase font-mono text-[#71717A]">Health Score</div>
+        {/* Health Score Pill / Banner */}
+        <div className="flex items-center justify-between sm:justify-start gap-3 bg-[#111113] border border-white/10 px-3.5 py-2 rounded-xl sm:rounded-2xl shadow-sm shrink-0">
+          <div className="flex items-center gap-2.5">
             <div
-              className={`text-sm font-bold font-mono ${
+              className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 ${
                 metrics.healthStatus === 'Healthy'
-                  ? 'text-emerald-400'
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                   : metrics.healthStatus === 'At Risk'
-                  ? 'text-amber-400'
-                  : 'text-rose-400'
+                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                  : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
               }`}
             >
-              {metrics.healthScore}% • {metrics.healthStatus}
+              <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-          </div>
-          <div
-            className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              metrics.healthStatus === 'Healthy'
-                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                : metrics.healthStatus === 'At Risk'
-                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-            }`}
-          >
-            <ShieldCheck className="w-5 h-5" />
+            <div>
+              <div className="text-[10px] uppercase font-mono text-[#71717A] leading-none">Health Score</div>
+              <div
+                className={`text-xs sm:text-sm font-bold font-mono mt-1 ${
+                  metrics.healthStatus === 'Healthy'
+                    ? 'text-emerald-400'
+                    : metrics.healthStatus === 'At Risk'
+                    ? 'text-amber-400'
+                    : 'text-rose-400'
+                }`}
+              >
+                {metrics.healthScore}% · {metrics.healthStatus}
+              </div>
+            </div>
           </div>
         </div>
       </div>
