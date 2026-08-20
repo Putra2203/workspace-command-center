@@ -9,11 +9,16 @@ import { detectStaleAndBlockedWork } from '@/domain/work_items/stale-work';
 import { filterUnassignedTickets } from '@/domain/work_items/ticket-pool';
 import { getNextFocusTask } from '@/domain/work_items/focus-queue';
 import { generateGitBranchSuggestion } from '@/domain/git/git-context';
+import dynamic from 'next/dynamic';
 import { FocusModeBanner } from './FocusModeBanner';
 import { QuickTaskCapture } from './QuickTaskCapture';
 import { WeeklyPerformanceWidget } from './WeeklyPerformanceWidget';
 import { InboxTriageWidget } from './InboxTriageWidget';
-import { WorkItemDetailPanel } from '@/components/work-items/WorkItemDetailPanel';
+
+const WorkItemDetailPanel = dynamic(
+  () => import('@/components/work-items/WorkItemDetailPanel').then(m => m.WorkItemDetailPanel),
+  { ssr: false }
+);
 
 interface Issue extends WorkItemLike {
   name?: string;

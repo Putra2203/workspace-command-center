@@ -150,11 +150,45 @@ export function WorkspaceDataProvider({ children }: { children: ReactNode }) {
           Promise.all(statesPromises),
         ]);
 
-        const combinedIssues = allIssuesArrays.flat();
-        const combinedStates = Array.from(new Map(allStatesArrays.flat().map(s => [s.id, s])).values());
+        const rawIssues = allIssuesArrays.flat();
+        const rawStates = allStatesArrays.flat();
+
+        // Deduplicate states by state name & map state UUIDs to canonical state ID
+        const canonicalStates: PlaneState[] = [];
+        const stateNameToCanonicalId = new Map<string, string>();
+        const stateIdToCanonicalId = new Map<string, string>();
+
+        rawStates.forEach(s => {
+          if (!s || !s.id) return;
+          const nameKey = (s.name || '').trim().toLowerCase();
+          if (!nameKey) return;
+
+          if (!stateNameToCanonicalId.has(nameKey)) {
+            stateNameToCanonicalId.set(nameKey, s.id);
+            canonicalStates.push(s);
+          }
+          const canonicalId = stateNameToCanonicalId.get(nameKey)!;
+          stateIdToCanonicalId.set(s.id, canonicalId);
+        });
+
+        // Map issues' state IDs to canonical state IDs
+        const combinedIssues = rawIssues.map(issue => {
+          const rawStateId = typeof issue.state === 'string'
+            ? issue.state
+            : (issue.state as { id?: string } | undefined)?.id || issue.state_detail?.id || '';
+
+          const canonicalStateId = stateIdToCanonicalId.get(rawStateId) || rawStateId;
+          const canonicalState = canonicalStates.find(cs => cs.id === canonicalStateId);
+
+          return {
+            ...issue,
+            state: canonicalStateId,
+            state_detail: canonicalState ? { id: canonicalState.id, name: canonicalState.name, group: canonicalState.group, color: canonicalState.color } : issue.state_detail
+          };
+        });
 
         setIssues(combinedIssues);
-        setStates(combinedStates);
+        setStates(canonicalStates);
       } else {
         const [issuesRes, statesRes, membersRes] = await Promise.all([
           fetch(`/api/plane?action=listIssues&projectId=${activeProjectId}`),
@@ -175,7 +209,17 @@ export function WorkspaceDataProvider({ children }: { children: ReactNode }) {
         }
 
         const rawStates = Array.isArray(statesData) ? statesData : statesData.results || [];
-        setStates(rawStates);
+        // Deduplicate single project states by name as well
+        const uniqueStates: PlaneState[] = [];
+        const seenNames = new Set<string>();
+        rawStates.forEach((s: PlaneState) => {
+          const nameKey = (s.name || '').trim().toLowerCase();
+          if (nameKey && !seenNames.has(nameKey)) {
+            seenNames.add(nameKey);
+            uniqueStates.push(s);
+          }
+        });
+        setStates(uniqueStates.length > 0 ? uniqueStates : rawStates);
 
         const rawMembers = Array.isArray(membersData) ? membersData : membersData.results || [];
         setMembers(rawMembers);

@@ -3,9 +3,14 @@
 import { useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { ListTodo, RefreshCw, AlertTriangle, Layers } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import { useWorkspaceData } from '@/lib/context/workspace-data';
-import { WorkItemDetailPanel } from '@/components/work-items/WorkItemDetailPanel';
+
+const WorkItemDetailPanel = dynamic(
+  () => import('@/components/work-items/WorkItemDetailPanel').then(m => m.WorkItemDetailPanel),
+  { ssr: false }
+);
 
 export default function IssuesPage() {
   const { currentUser, activeProjectKey, userScope, setUserScope } = useWorkspaceStore();
