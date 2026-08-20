@@ -396,12 +396,20 @@ export class PlaneService {
       realProjectId = projects[0].id;
     }
 
-    // Resolve state name to state UUID if provided
-    if (data.state && typeof data.state === 'string' && !this.isUUID(data.state)) {
-      data.state = await this.resolveStateId(realProjectId, data.state);
+    const payload: Record<string, any> = { ...data };
+    if (!payload.name && payload.title) {
+      payload.name = payload.title;
+    }
+    if (!payload.description_html && payload.description) {
+      payload.description_html = `<p>${payload.description}</p>`;
     }
 
-    const response = await this.client.post(`/workspaces/${slug}/projects/${realProjectId}/issues/`, data);
+    // Resolve state name to state UUID if provided
+    if (payload.state && typeof payload.state === 'string' && !this.isUUID(payload.state)) {
+      payload.state = await this.resolveStateId(realProjectId, payload.state);
+    }
+
+    const response = await this.client.post(`/workspaces/${slug}/projects/${realProjectId}/issues/`, payload);
     await this.cache.deletePrefix(`issues_${slug}_${realProjectId}`);
     return response.data;
   }

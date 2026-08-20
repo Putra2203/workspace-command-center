@@ -45,6 +45,25 @@ User message: "${message}"`,
         contents: `You are an AI intent parser for Plane Project Management. Analyze the user prompt and return JSON with intent and entities.
 Valid intents: "list_projects", "list_issues", "create_issue", "batch_create_issues", "decompose", "plan", "get_issue", "update_issue", "help", "chat", "unknown".
 
+For batch task creation (when user provides multiple tasks, list of tasks, format like "1. Title : Description" or multi-line tasks):
+Return intent "batch_create_issues" with entities:
+{
+  "tasks": [
+    { "title": "Task Title 1", "description": "Task Description 1", "priority": "high|medium|low" },
+    { "title": "Task Title 2", "description": "Task Description 2" }
+  ],
+  "projectKey": "..." // if mentioned
+}
+
+For single task creation:
+Return intent "create_issue" with entities:
+{
+  "title": "...",
+  "description": "...",
+  "priority": "...",
+  "projectKey": "..."
+}
+
 User Prompt: "${message}"
 Active Project Context: "${context?.activeProjectKey || ''}"`,
         config: {
@@ -134,8 +153,30 @@ export function parseIntent(message: string, context?: ConversationContext): Int
     return result;
   }
 
-  const isCreationPrompt = /buat|create|masukin|tambah|input|new task|new issue/i.test(lowerMessage);
+  const isCreationPrompt = /buat|create|masukin|tambah|input|new task|new issue/i.test(lowerMessage) || /^\s*\d+[\.\)]\s*.+?:/m.test(message);
   if (isCreationPrompt) {
+    // Check for structured multi-line list with "1. Title : Description" format
+    const lines = message.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const structuredTasks: { title: string; description?: string }[] = [];
+
+    for (const line of lines) {
+      const match = line.match(/^(?:\d+[\.\)]|\-|\*)\s*([^:]+?)(?:\s*:\s*(.+))?$/);
+      if (match && match[1] && match[1].length > 1) {
+        structuredTasks.push({
+          title: match[1].trim(),
+          description: match[2]?.trim(),
+        });
+      }
+    }
+
+    if (structuredTasks.length >= 2) {
+      result.intent = 'batch_create_issues';
+      result.entities.tasks = structuredTasks;
+      result.entities.titles = structuredTasks.map(t => t.title);
+      result.confidence = 0.95;
+      return result;
+    }
+
     const listItems = message
       .split(/(?:\r?\n|\b\d+[\.\)]\s*|[\-\•]\s*)/)
       .map(s => s.trim())
@@ -144,6 +185,16 @@ export function parseIntent(message: string, context?: ConversationContext): Int
     if (listItems.length >= 2) {
       result.intent = 'batch_create_issues';
       result.entities.titles = listItems;
+      result.entities.tasks = listItems.map(item => {
+        const colonIdx = item.indexOf(':');
+        if (colonIdx > -1) {
+          return {
+            title: item.slice(0, colonIdx).trim(),
+            description: item.slice(colonIdx + 1).trim(),
+          };
+        }
+        return { title: item };
+      });
       result.confidence = 0.9;
       return result;
     }
@@ -153,13 +204,20 @@ export function parseIntent(message: string, context?: ConversationContext): Int
     if (parts.length >= 2) {
       result.intent = 'batch_create_issues';
       result.entities.titles = parts;
+      result.entities.tasks = parts.map(t => ({ title: t }));
       result.confidence = 0.85;
       return result;
     }
 
     if (afterActionText.trim().length > 0) {
       result.intent = 'create_issue';
-      result.entities.title = afterActionText.trim();
+      const colonIdx = afterActionText.indexOf(':');
+      if (colonIdx > -1) {
+        result.entities.title = afterActionText.slice(0, colonIdx).trim();
+        result.entities.description = afterActionText.slice(colonIdx + 1).trim();
+      } else {
+        result.entities.title = afterActionText.trim();
+      }
       result.confidence = 0.8;
       return result;
     }
@@ -250,6 +308,7 @@ export function buildActionPlanFromIntent(
   if (intentResult.intent === 'create_issue') {
     const title = intentResult.entities.title || 'New Task';
     const changes: Record<string, unknown> = { title };
+    if (intentResult.entities.description) changes.description = intentResult.entities.description;
     if (intentResult.entities.priority) changes.priority = intentResult.entities.priority;
     if (intentResult.entities.state) changes.state = intentResult.entities.state;
 
@@ -273,17 +332,22 @@ export function buildActionPlanFromIntent(
   }
 
   if (intentResult.intent === 'batch_create_issues') {
-    const titles = intentResult.entities.titles || [];
-    const steps: ActionStep[] = titles.map(t => ({
+    const tasks: { title: string; description?: string; priority?: string }[] =
+      intentResult.entities.tasks || (intentResult.entities.titles || []).map(t => ({ title: t }));
+    const steps: ActionStep[] = tasks.map(t => ({
       operation: 'createIssue',
       target: targetProject,
-      changes: { title: t },
+      changes: {
+        title: t.title,
+        ...(t.description ? { description: t.description } : {}),
+        ...(t.priority ? { priority: t.priority } : {}),
+      },
     }));
 
     const plan: ActionPlan = {
       id: planId,
       intent: 'batch_create_issues',
-      summary: `Buat ${titles.length} task sekaligus di project ${targetProject}`,
+      summary: `Buat ${tasks.length} task sekaligus di project ${targetProject}`,
       risk: 'medium',
       requiresApproval: true,
       steps,

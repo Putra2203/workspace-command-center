@@ -16,7 +16,9 @@ export interface IntentResult {
     assignee?: string;
     priority?: string;
     title?: string;
+    description?: string;
     titles?: string[]; // For batch task creation
+    tasks?: { title: string; description?: string; priority?: string }[]; // For rich batch task creation with descriptions
     filter?: string;
     chatReply?: string; // For conversational AI responses
   };
