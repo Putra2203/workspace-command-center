@@ -59,8 +59,26 @@ export default function IssuesPage() {
       ) : (
         <div className="space-y-2">
           {displayIssues.map(issue => {
-            const rawAssignee = issue.assignees && issue.assignees.length > 0 ? issue.assignees[0] : '';
-            const assigneeName = rawAssignee ? memberMap.get(rawAssignee) || '' : '';
+            let assigneeName = '';
+            if (Array.isArray((issue as any).assignee_details) && (issue as any).assignee_details.length > 0) {
+              const detail = (issue as any).assignee_details[0];
+              if (typeof detail === 'object' && detail !== null) {
+                assigneeName = `${detail.first_name || ''} ${detail.last_name || ''}`.trim() || detail.display_name || detail.email || '';
+              }
+            }
+            if (!assigneeName) {
+              const rawAssignees = Array.isArray(issue.assignees) && issue.assignees.length > 0
+                ? issue.assignees
+                : (Array.isArray((issue as any).assignee_ids) ? (issue as any).assignee_ids : []);
+              if (rawAssignees.length > 0) {
+                const first = rawAssignees[0];
+                if (typeof first === 'object' && first !== null) {
+                  assigneeName = `${first.first_name || ''} ${first.last_name || ''}`.trim() || first.display_name || first.email || '';
+                } else if (typeof first === 'string') {
+                  assigneeName = memberMap.get(first) || '';
+                }
+              }
+            }
 
             return (
               <div

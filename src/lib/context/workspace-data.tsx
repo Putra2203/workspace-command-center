@@ -145,13 +145,23 @@ export function WorkspaceDataProvider({ children }: { children: ReactNode }) {
             .catch(() => [])
         );
 
-        const [allIssuesArrays, allStatesArrays] = await Promise.all([
+        const membersPromises = projects.map(p =>
+          fetch(`/api/plane?action=listMembers&projectId=${p.id}`)
+            .then(res => res.json())
+            .then(data => (Array.isArray(data) ? data : data.results || []))
+            .catch(() => [])
+        );
+
+        const [allIssuesArrays, allStatesArrays, allMembersArrays] = await Promise.all([
           Promise.all(issuesPromises),
           Promise.all(statesPromises),
+          Promise.all(membersPromises),
         ]);
 
         const rawIssues = allIssuesArrays.flat();
         const rawStates = allStatesArrays.flat();
+        const rawMembers = allMembersArrays.flat();
+        setMembers(rawMembers);
 
         // Deduplicate states by state name & map state UUIDs to canonical state ID
         const canonicalStates: PlaneState[] = [];
@@ -245,13 +255,17 @@ export function WorkspaceDataProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [activeProjectId, fetchProjectData]);
 
-  // Construct Map of Member UUID -> Human Name
   const memberMap = useMemo(() => {
     const map = new Map<string, string>();
-    (members as PlaneMemberLike[]).forEach(m => {
-      const name = m.member ? `${m.member.first_name || ''} ${m.member.last_name || ''}`.trim() || m.member.email : '';
-      if (m.id && name) map.set(m.id, name);
-      if (m.member?.id && name) map.set(m.member.id, name);
+    (members as any[]).forEach(m => {
+      if (!m) return;
+      const directName = `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.display_name || m.email || '';
+      const nestedName = m.member ? (`${m.member.first_name || ''} ${m.member.last_name || ''}`.trim() || m.member.display_name || m.member.email || '') : '';
+      const finalName = directName || nestedName;
+
+      if (m.id && finalName) map.set(m.id, finalName);
+      if (m.member?.id && finalName) map.set(m.member.id, finalName);
+      if (m.user_id && finalName) map.set(m.user_id, finalName);
     });
     return map;
   }, [members]);
@@ -263,8 +277,29 @@ export function WorkspaceDataProvider({ children }: { children: ReactNode }) {
     if (!currentUser?.id) return [];
 
     return issues.filter(issue => {
-      if (!issue.assignees || issue.assignees.length === 0) return false;
-      return issue.assignees.includes(currentUser.id);
+      const rawAny = issue as any;
+      const assignees = Array.isArray(issue.assignees) ? issue.assignees : [];
+      const assigneeIds = Array.isArray(rawAny.assignee_ids) ? rawAny.assignee_ids : [];
+      const assigneeDetails = Array.isArray(rawAny.assignee_details) ? rawAny.assignee_details : [];
+
+      const matchesStringId = (idStr: any) =>
+        typeof idStr === 'string' && (
+          idStr === currentUser.id ||
+          (currentUser as any).planeMemberId === idStr
+        );
+
+      const matchesObject = (obj: any) => {
+        if (typeof obj !== 'object' || obj === null) return false;
+        if (obj.id && (obj.id === currentUser.id || (currentUser as any).planeMemberId === obj.id)) return true;
+        if (obj.email && currentUser.email && obj.email.toLowerCase() === currentUser.email.toLowerCase()) return true;
+        return false;
+      };
+
+      const hasMatchInAssignees = assignees.some((a: any) => matchesStringId(a) || matchesObject(a));
+      const hasMatchInAssigneeIds = assigneeIds.some((a: any) => matchesStringId(a));
+      const hasMatchInDetails = assigneeDetails.some((a: any) => matchesObject(a));
+
+      return hasMatchInAssignees || hasMatchInAssigneeIds || hasMatchInDetails;
     });
   }, [issues, userScope, currentUser]);
 

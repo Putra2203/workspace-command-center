@@ -65,8 +65,31 @@ export default function BoardPage() {
       ? issue.state
       : (issue.state as { id?: string } | undefined)?.id || issue.state_detail?.id || '';
 
-    const rawAssignee = issue.assignees && issue.assignees.length > 0 ? issue.assignees[0] : '';
-    const assigneeName = rawAssignee ? memberMap.get(rawAssignee) || undefined : undefined;
+    let assigneeName: string | undefined = undefined;
+
+    // 1. Try issue.assignee_details
+    if (Array.isArray((issue as any).assignee_details) && (issue as any).assignee_details.length > 0) {
+      const detail = (issue as any).assignee_details[0];
+      if (typeof detail === 'object' && detail !== null) {
+        assigneeName = `${detail.first_name || ''} ${detail.last_name || ''}`.trim() || detail.display_name || detail.email;
+      }
+    }
+
+    // 2. Try issue.assignees or issue.assignee_ids
+    if (!assigneeName) {
+      const rawAssignees = Array.isArray(issue.assignees) && issue.assignees.length > 0
+        ? issue.assignees
+        : (Array.isArray((issue as any).assignee_ids) ? (issue as any).assignee_ids : []);
+
+      if (rawAssignees.length > 0) {
+        const first = rawAssignees[0];
+        if (typeof first === 'object' && first !== null) {
+          assigneeName = `${first.first_name || ''} ${first.last_name || ''}`.trim() || first.display_name || first.email;
+        } else if (typeof first === 'string') {
+          assigneeName = memberMap.get(first);
+        }
+      }
+    }
 
     return {
       id: issue.id,
