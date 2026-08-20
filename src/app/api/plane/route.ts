@@ -100,9 +100,10 @@ export async function POST(request: NextRequest) {
 
     switch (action) {
       case 'createIssue': {
-        const { projectId, ...data } = body;
-        if (!projectId) return Response.json({ error: 'Missing projectId' }, { status: 400 });
-        const issue = await planeService.createIssue(projectId, data);
+        const targetProjectId = body.projectId || searchParams.get('projectId');
+        if (!targetProjectId) return Response.json({ error: 'Missing projectId' }, { status: 400 });
+        const { projectId: _p, ...data } = body;
+        const issue = await planeService.createIssue(targetProjectId, data);
         return Response.json(issue);
       }
       case 'addComment': {
@@ -135,11 +136,13 @@ export async function PATCH(request: NextRequest) {
 
     switch (action) {
       case 'updateIssue': {
-        const { projectId, issueId, ...data } = body;
-        if (!projectId || !issueId) {
+        const targetProjectId = body.projectId || searchParams.get('projectId');
+        const targetIssueId = body.issueId || searchParams.get('issueId');
+        if (!targetProjectId || !targetIssueId) {
           return Response.json({ error: 'Missing projectId or issueId' }, { status: 400 });
         }
-        const issue = await planeService.updateIssue(projectId, issueId, data);
+        const { projectId: _p, issueId: _i, ...data } = body;
+        const issue = await planeService.updateIssue(targetProjectId, targetIssueId, data);
         return Response.json(issue);
       }
       default:

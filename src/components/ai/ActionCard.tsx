@@ -1,20 +1,38 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion } from 'motion/react';
-import { CheckCircle2, Info, AlertCircle, ListTodo, FileText, ShieldAlert, Play, X, Loader2, Pencil, Sparkles, Check } from 'lucide-react';
+import {
+  CheckCircle2,
+  Info,
+  AlertCircle,
+  ListTodo,
+  FileText,
+  ShieldAlert,
+  Play,
+  X,
+  Loader2,
+  Pencil,
+  Sparkles,
+  Check,
+  ArrowUpRight,
+  ExternalLink,
+  HelpCircle,
+} from 'lucide-react';
 import { ActionPlan } from '@/types/ai';
 import { ActionPlanSchema } from '@/types/schemas';
 
 interface ActionCardProps {
   data: {
-    type: 'issue_created' | 'issue_updated' | 'issue_list' | 'batch_issues_created' | 'error' | 'info';
+    type: 'issue_created' | 'issue_updated' | 'issue_list' | 'batch_issues_created' | 'clarification' | 'operation_receipt' | 'error' | 'info';
     title?: string;
     message?: string;
     data?: any;
     items?: any[];
     [key: string]: any;
   };
+  onOpenIssue?: (issueKey: string, projectId?: string) => void;
+  onSelectOption?: (option: { label: string; value: string; action?: string }) => void;
 }
 
 interface ActionPlanCardProps {
@@ -108,13 +126,13 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
       animate={{ opacity: 1, y: 0 }}
       className="p-4 rounded-xl border border-violet-500/30 bg-violet-950/[0.08] shadow-[0_0_25px_rgba(139,92,246,0.06)] my-3 w-full space-y-3"
     >
-      {/* Workflow Phase Indicator */}
+      {/* Workflow Phase Indicator (v2 Lifecycle) */}
       <div className="flex items-center justify-between text-[9px] font-mono text-[#71717A] border-b border-violet-500/20 pb-2">
-        <span className="flex items-center gap-1 text-violet-300">
+        <span className="flex items-center gap-1 text-violet-300 font-semibold">
           <Sparkles className="w-3 h-3 text-violet-400" />
           PROPOSED MISSION PLAN
         </span>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto">
           <span className="text-violet-400">● ANALYZE</span>
           <span>─</span>
           <span className="text-violet-400">● PLAN</span>
@@ -126,6 +144,8 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
           <span className={isExecuting ? 'text-cyan-400 font-bold animate-pulse' : 'text-[#52525B]'}>
             ○ EXECUTE
           </span>
+          <span>─</span>
+          <span className="text-[#52525B]">○ VERIFY</span>
         </div>
       </div>
 
@@ -245,7 +265,7 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
           {isExecuting ? (
             <>
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>Executing Mission...</span>
+              <span>Executing & Verifying...</span>
             </>
           ) : (
             <>
@@ -259,10 +279,170 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
   );
 }
 
-export function ActionCard({ data }: ActionCardProps) {
+export function ActionCard({ data, onOpenIssue, onSelectOption }: ActionCardProps) {
+  const [completedItems, setCompletedItems] = useState<Record<string, boolean>>({});
+  const [loadingItems, setLoadingItems] = useState<Record<string, boolean>>({});
+
+  const handleQuickComplete = async (issueKey: string, projectId?: string) => {
+    setLoadingItems((prev) => ({ ...prev, [issueKey]: true }));
+    try {
+      const res = await fetch(
+        `/api/plane?action=updateIssue&projectId=${encodeURIComponent(projectId || 'ALL')}&issueId=${encodeURIComponent(issueKey)}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: projectId || 'ALL', issueId: issueKey, state: 'Done' }),
+        }
+      );
+      if (res.ok) {
+        setCompletedItems((prev) => ({ ...prev, [issueKey]: true }));
+      }
+    } catch {
+      // Fallback
+    } finally {
+      setLoadingItems((prev) => ({ ...prev, [issueKey]: false }));
+    }
+  };
+
+  // 1. Issue List Card
+  if (data.type === 'issue_list') {
+    const items = data.data?.items || data.items || [];
+    const projectId = data.data?.projectId || 'ALL';
+
+    return (
+      <div className="p-4 rounded-xl bg-[#070A0E] border border-cyan-500/20 shadow-[0_0_20px_rgba(56,189,248,0.04)] my-3 space-y-3">
+        <div className="flex items-center justify-between border-b border-white/[0.06] pb-2.5">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span className="text-xs font-mono font-bold text-cyan-400">
+              {data.title || `Task Queue (${items.length})`}
+            </span>
+          </div>
+          <span className="text-[10px] font-mono text-[#71717A]">
+            0-TOKEN ACTIVE HUD
+          </span>
+        </div>
+
+        {items.length === 0 ? (
+          <div className="p-4 text-center font-mono text-xs text-[#71717A] italic bg-[#0B0F14] rounded-lg border border-white/[0.04]">
+            No matching tasks found for this query.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {items.map((item: any, idx: number) => {
+              const isDone = completedItems[item.key] || item.state?.toLowerCase() === 'done';
+              const isLoading = loadingItems[item.key];
+
+              const getPrioColor = (prio: string) => {
+                switch (prio?.toLowerCase()) {
+                  case 'urgent': return 'text-rose-400 bg-rose-500/10 border-rose-500/20';
+                  case 'high': return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
+                  case 'medium': return 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20';
+                  default: return 'text-[#71717A] bg-white/[0.04] border-white/[0.06]';
+                }
+              };
+
+              return (
+                <div
+                  key={item.id || idx}
+                  className={`p-3 rounded-lg border transition-all ${
+                    isDone
+                      ? 'bg-emerald-950/10 border-emerald-500/20 opacity-75'
+                      : 'bg-[#0B0F14] hover:bg-[#10151C] border-white/[0.06] hover:border-cyan-500/30'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => onOpenIssue?.(item.key, projectId)}
+                          className="text-[11px] font-mono font-bold text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-0.5"
+                        >
+                          <span>{item.key}</span>
+                          <ArrowUpRight className="w-3 h-3 opacity-60" />
+                        </button>
+                        <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border font-semibold ${getPrioColor(item.priority)}`}>
+                          {item.priority || 'none'}
+                        </span>
+                        <span className="text-[9px] font-mono text-[#71717A] truncate">
+                          • {item.assignee || 'Unassigned'}
+                        </span>
+                      </div>
+                      <div className={`text-xs font-medium truncate ${isDone ? 'line-through text-[#71717A]' : 'text-[#FAFAFA]'}`}>
+                        {item.title}
+                      </div>
+                    </div>
+
+                    {/* Quick Inline Actions (0 Tokens) */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => onOpenIssue?.(item.key, projectId)}
+                        className="px-2 py-1 rounded bg-[#10151C] hover:bg-[#18202B] border border-white/[0.08] text-[10px] font-mono text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors"
+                      >
+                        Inspect
+                      </button>
+                      <button
+                        onClick={() => handleQuickComplete(item.key, projectId)}
+                        disabled={isDone || isLoading}
+                        className={`px-2 py-1 rounded border text-[10px] font-mono font-medium flex items-center gap-1 transition-colors ${
+                          isDone
+                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 cursor-default'
+                            : 'bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
+                        }`}
+                      >
+                        {isLoading ? (
+                          <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
+                        ) : isDone ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            <span>Done</span>
+                          </>
+                        ) : (
+                          <span>Complete</span>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 2. Clarification / Disambiguation Card
+  if (data.type === 'clarification') {
+    const options = data.data?.options || [];
+    return (
+      <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-500/30 space-y-2.5 my-2">
+        <div className="flex items-center gap-1.5 text-amber-400 font-mono text-xs font-semibold">
+          <HelpCircle className="w-4 h-4" />
+          <span>CLARIFICATION REQUIRED</span>
+        </div>
+        <div className="text-xs text-[#E4E4E7]">{data.message || data.title}</div>
+        {options.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {options.map((opt: any, i: number) => (
+              <button
+                key={i}
+                onClick={() => onSelectOption?.(opt)}
+                className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-mono transition-colors"
+              >
+                {opt.label || opt.value}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 3. Issue Created Confirmation
   if (data.type === 'issue_created') {
     return (
-      <div className="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/20 text-xs space-y-1 my-2">
+      <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-xs space-y-1 my-2">
         <div className="flex items-center gap-1.5 text-emerald-400 font-mono font-semibold">
           <CheckCircle2 className="w-4 h-4" />
           <span>MISSION OPERATION CREATED</span>
@@ -272,20 +452,34 @@ export function ActionCard({ data }: ActionCardProps) {
     );
   }
 
+  // 4. Issue Updated / Verified Operation Receipt
+  if (data.type === 'issue_updated' || data.type === 'operation_receipt') {
+    return (
+      <div className="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-500/30 text-xs space-y-1 my-2">
+        <div className="flex items-center gap-1.5 text-cyan-400 font-mono font-semibold">
+          <CheckCircle2 className="w-4 h-4" />
+          <span>{data.title || '✓ OPERATION VERIFIED'}</span>
+        </div>
+        <div className="text-[#FAFAFA] font-medium">{data.message || data.data?.message}</div>
+      </div>
+    );
+  }
+
+  // 5. Batch Created
   if (data.type === 'batch_issues_created') {
     return (
       <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-500/20 text-xs space-y-2 my-2">
         <div className="flex items-center gap-1.5 text-emerald-400 font-mono font-semibold">
           <CheckCircle2 className="w-4 h-4" />
-          <span>BATCH OPERATIONS EXECUTED ({data.items?.length || 0})</span>
+          <span>BATCH OPERATIONS EXECUTED ({data.items?.length || data.data?.items?.length || 0})</span>
         </div>
-        <div className="text-[#FAFAFA]">{data.message}</div>
-        {data.items && data.items.length > 0 && (
+        <div className="text-[#FAFAFA]">{data.title || data.message}</div>
+        {data.data?.items && data.data.items.length > 0 && (
           <div className="space-y-1 pt-1 border-t border-emerald-500/20">
-            {data.items.map((it: any, i: number) => (
+            {data.data.items.map((it: any, i: number) => (
               <div key={i} className="font-mono text-[11px] text-emerald-300/90 flex items-center gap-1.5">
                 <span>✓</span>
-                <span>{it.name || it.title}</span>
+                <span>{it.name || it.title || it.key}</span>
               </div>
             ))}
           </div>
@@ -294,20 +488,21 @@ export function ActionCard({ data }: ActionCardProps) {
     );
   }
 
+  // 6. Error
   if (data.type === 'error') {
     return (
-      <div className="p-3 rounded-xl bg-rose-950/20 border border-rose-500/20 text-xs space-y-1 my-2">
+      <div className="p-3.5 rounded-xl bg-rose-950/20 border border-rose-500/20 text-xs space-y-1 my-2">
         <div className="flex items-center gap-1.5 text-rose-400 font-mono font-semibold">
           <AlertCircle className="w-4 h-4" />
           <span>SYSTEM INTERRUPTION</span>
         </div>
-        <div className="text-[#FAFAFA]">{data.message || 'Operation failed.'}</div>
+        <div className="text-[#FAFAFA]">{data.message || data.data?.message || 'Operation failed.'}</div>
       </div>
     );
   }
 
   return (
-    <div className="p-3 rounded-xl bg-[#0B0F14] border border-white/[0.06] text-xs space-y-1 my-2">
+    <div className="p-3.5 rounded-xl bg-[#0B0F14] border border-white/[0.06] text-xs space-y-1 my-2">
       <div className="flex items-center gap-1.5 text-cyan-400 font-mono font-semibold">
         <Info className="w-4 h-4" />
         <span>SYSTEM OBSERVATION</span>

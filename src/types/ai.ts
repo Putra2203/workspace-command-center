@@ -1,4 +1,4 @@
-export type ActionCardType = 'issue_created' | 'issue_updated' | 'issue_list' | 'batch_issues_created' | 'error' | 'info';
+export type ActionCardType = 'issue_created' | 'issue_updated' | 'issue_list' | 'batch_issues_created' | 'clarification' | 'operation_receipt' | 'error' | 'info';
 
 export interface ActionCard {
   type: ActionCardType;
@@ -20,7 +20,9 @@ export interface IntentResult {
     titles?: string[]; // For batch task creation
     tasks?: { title: string; description?: string; priority?: string }[]; // For rich batch task creation with descriptions
     filter?: string;
+    userScope?: 'my_tasks' | 'all';
     chatReply?: string; // For conversational AI responses
+    options?: { label: string; value: string; action?: string }[]; // For clarification chips
   };
   confidence: number;
 }
@@ -28,6 +30,9 @@ export interface IntentResult {
 export interface ConversationContext {
   activeProjectId?: string;
   activeProjectKey?: string;
+  availableProjects?: { id: string; identifier: string; name: string }[];
+  availableMembers?: { id: string; name: string; email: string }[];
+  availableStates?: { id: string; name: string; group: string }[];
 }
 
 export type ActionStep = {

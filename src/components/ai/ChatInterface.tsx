@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   SendHorizontal,
   ImagePlus,
@@ -14,10 +14,12 @@ import {
   Zap,
   Activity,
   Layers,
-  Radio
+  Radio,
+  ExternalLink,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ActionCard, ActionPlanCard } from './ActionCard';
+import { IssuePreviewDrawer } from './IssuePreviewDrawer';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import { useWorkspaceData } from '@/lib/context/workspace-data';
 import { ActionPlan } from '@/types/ai';
@@ -49,7 +51,7 @@ const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
 export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
   const { activeProjectId, activeProjectKey, pendingCommand, setPendingCommand } = useWorkspaceStore();
-  const { issues } = useWorkspaceData();
+  const { issues, fetchProjectData } = useWorkspaceData();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -59,6 +61,11 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
   const [showContextMobile, setShowContextMobile] = useState(false);
   const [imageAttachment, setImageAttachment] = useState<{ base64: string; mimeType: string; name: string } | null>(null);
   
+  // Slide-over Task HUD state
+  const [previewIssueKey, setPreviewIssueKey] = useState<string | null>(null);
+  const [previewProjectId, setPreviewProjectId] = useState<string>('ALL');
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -108,7 +115,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
       const res = await fetch('/api/ai/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: activeProjectId }),
+        body: JSON.stringify({ projectId: activeProjectId || 'ALL' }),
       });
       const data = await res.json();
       if (data.session) {
@@ -164,14 +171,38 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
     reader.readAsDataURL(file);
   };
 
-  const handleSend = async () => {
-    const trimmed = input.trim();
-    if ((!trimmed && !imageAttachment) || isLoading) return;
+  const handleOpenDrawer = (issueKey: string, projectId?: string) => {
+    setPreviewIssueKey(issueKey);
+    setPreviewProjectId(projectId || activeProjectId || 'ALL');
+    setIsDrawerOpen(true);
+  };
+
+  const handleSend = async (customPrompt?: string) => {
+    let rawInput = (customPrompt !== undefined ? customPrompt : input).trim();
+    if ((!rawInput && !imageAttachment) || isLoading) return;
+
+    // Handle Slash Commands deterministically
+    let processedMessage = rawInput;
+    if (rawInput.startsWith('/today')) {
+      processedMessage = 'tampilkan tugasku';
+    } else if (rawInput.startsWith('/overdue')) {
+      processedMessage = 'tampilkan task overdue';
+    } else if (rawInput.startsWith('/blockers')) {
+      processedMessage = 'tampilkan task yang blocked';
+    } else if (rawInput.startsWith('/health')) {
+      processedMessage = 'ringkasan kesehatan dan progress project';
+    } else if (rawInput.startsWith('/project ')) {
+      const pName = rawInput.replace('/project ', '').trim();
+      processedMessage = `tampilkan task di project ${pName}`;
+    } else if (rawInput.startsWith('/plan ')) {
+      const fName = rawInput.replace('/plan ', '').trim();
+      processedMessage = `pecah feature ${fName} menjadi subtask`;
+    }
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: trimmed,
+      content: rawInput,
       imageUrl: imageAttachment ? `data:${imageAttachment.mimeType};base64,${imageAttachment.base64}` : undefined,
     };
 
@@ -190,20 +221,20 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
           body: JSON.stringify({
             sessionId,
             role: 'user',
-            content: trimmed || 'Attachment analyzed',
+            content: rawInput || 'Attachment analyzed',
           }),
         }).then(() => loadSessions()).catch(() => {});
       }
 
-      const targetProject = activeProjectKey === 'ALL' || !activeProjectKey ? 'PROJECT1' : activeProjectKey;
+      const targetProject = activeProjectKey || activeProjectId || 'ALL';
       const res = await fetch('/api/ai/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: trimmed || 'Analisis screenshot ini dan buat task baru jika ditemukan isu.',
+          message: processedMessage || 'Analisis screenshot ini dan buat task baru jika ditemukan isu.',
           projectId: targetProject,
           sessionId,
-          image: currentAttachment ? { base64: currentAttachment.base64, mimeType: currentAttachment.mimeType } : undefined,
+          image: currentAttachment ? { base64Data: currentAttachment.base64, mimeType: currentAttachment.mimeType } : undefined,
         }),
       });
 
@@ -274,6 +305,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
       ]);
 
       if (onActionExecuted) onActionExecuted();
+      fetchProjectData?.();
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -286,11 +318,44 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
     }
   };
 
+  const renderContentWithMentions = (content: string) => {
+    // Detect issue keys like BSJ-124, PROJECT1-31, etc.
+    const parts = content.split(/(\b[A-Z0-9]+-\d+\b)/g);
+    return (
+      <div className="whitespace-pre-wrap leading-relaxed">
+        {parts.map((part, i) => {
+          if (/^[A-Z0-9]+-\d+$/i.test(part)) {
+            return (
+              <button
+                key={i}
+                onClick={() => handleOpenDrawer(part.toUpperCase())}
+                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-300 font-mono text-[11px] font-bold transition-colors cursor-pointer"
+              >
+                <span>{part.toUpperCase()}</span>
+                <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+              </button>
+            );
+          }
+          return part;
+        })}
+      </div>
+    );
+  };
+
   const activeOperationsCount = issues.length;
 
   return (
     <div className="flex h-full overflow-hidden bg-[#05070A]">
-      {/* Column 1: Left Mission Log History (Desktop 3-col layout) */}
+      {/* Slide-Over Issue Preview Drawer */}
+      <IssuePreviewDrawer
+        isOpen={isDrawerOpen}
+        issueKey={previewIssueKey}
+        projectId={previewProjectId}
+        onClose={() => setIsDrawerOpen(false)}
+        onIssueUpdated={() => fetchProjectData?.()}
+      />
+
+      {/* Column 1: Left Mission Log History */}
       <aside className="w-64 border-r border-white/[0.06] bg-[#080B10] flex-col hidden lg:flex shrink-0">
         <div className="p-3.5 border-b border-white/[0.04] flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -370,27 +435,24 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                   AI Command & Intelligence System
                 </h3>
                 <p className="text-xs text-[#71717A] max-w-sm font-mono">
-                  Ask AI to decompose features into sub-tasks, triage screenshots, or query project telemetry.
+                  Autonomous project copilot for Erdavid Work OS. List tasks, decompose epics, or triage issues.
                 </p>
               </div>
 
-              {/* Quick Starters */}
+              {/* Quick Starters & Slash Commands */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg w-full pt-4">
                 {[
-                  'Break down Authentication into frontend and backend tasks',
-                  'Find all overdue and blocked operations in this mission',
-                  'Analyze active sprint workload and suggest priorities',
-                  'Drop a screenshot for visual bug triage',
-                ].map((prompt) => (
+                  { label: '📋 Tampilkan tugasku', cmd: 'tampilkan tugasku' },
+                  { label: '⚡ List task di project aktif', cmd: 'list task ku' },
+                  { label: '🧩 Pecah feature Authentication', cmd: 'pecah feature User Authentication menjadi subtask' },
+                  { label: '📊 Tampilkan daftar project', cmd: 'daftar project' },
+                ].map((item, idx) => (
                   <button
-                    key={prompt}
-                    onClick={() => {
-                      setInput(prompt);
-                      inputRef.current?.focus();
-                    }}
-                    className="p-2.5 rounded-lg bg-[#0B0F14] border border-white/[0.06] hover:border-violet-500/30 text-left text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors font-mono"
+                    key={idx}
+                    onClick={() => handleSend(item.cmd)}
+                    className="p-2.5 rounded-lg bg-[#0B0F14] border border-white/[0.06] hover:border-cyan-500/30 text-left text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors font-mono"
                   >
-                    ✦ {prompt}
+                    {item.label}
                   </button>
                 ))}
               </div>
@@ -421,7 +483,8 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                       className="rounded-lg max-h-48 border border-white/10 object-cover mb-2"
                     />
                   )}
-                  <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
+                  
+                  {renderContentWithMentions(m.content)}
 
                   {m.plan && (
                     <ActionPlanCard
@@ -432,7 +495,12 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                   )}
 
                   {m.actionCards?.map((card, i) => (
-                    <ActionCard key={i} data={card} />
+                    <ActionCard
+                      key={i}
+                      data={card}
+                      onOpenIssue={handleOpenDrawer}
+                      onSelectOption={(opt) => handleSend(opt.value || opt.label)}
+                    />
                   ))}
                 </div>
               </div>
@@ -441,13 +509,13 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
 
           {isLoading && (
             <div className="flex flex-col items-start space-y-1">
-              <span className="text-[9px] font-mono uppercase text-violet-400 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
+              <span className="text-[9px] font-mono uppercase text-cyan-400 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
                 AI PROCESSING CONTEXT...
               </span>
-              <div className="p-3.5 rounded-xl bg-[#0B0F14] border border-violet-500/20 text-xs font-mono text-[#A1A1AA] flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-violet-400 animate-spin" />
-                <span>Decomposing project context and generating mission plan…</span>
+              <div className="p-3.5 rounded-xl bg-[#0B0F14] border border-cyan-500/20 text-xs font-mono text-[#A1A1AA] flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-cyan-400 animate-spin" />
+                <span>Interpreting command and fetching live workspace state…</span>
               </div>
             </div>
           )}
@@ -472,7 +540,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
             </div>
           )}
 
-          <div className="flex items-end gap-2 bg-[#0B0F14] border border-white/[0.08] focus-within:border-violet-500/40 rounded-xl p-2 transition-colors">
+          <div className="flex items-end gap-2 bg-[#0B0F14] border border-white/[0.08] focus-within:border-cyan-500/40 rounded-xl p-2 transition-colors">
             <input
               type="file"
               ref={fileInputRef}
@@ -503,14 +571,14 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                   handleSend();
                 }
               }}
-              placeholder="Ask AI or type mission command... (Enter to send)"
+              placeholder="Ask AI or type slash command (/today, /overdue, /health, /plan)..."
               className="flex-1 bg-transparent border-none outline-none text-xs text-[#FAFAFA] placeholder-[#52525B] font-mono resize-none py-1.5 max-h-32"
             />
 
             <button
-              onClick={handleSend}
+              onClick={() => handleSend()}
               disabled={(!input.trim() && !imageAttachment) || isLoading}
-              className="p-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white disabled:opacity-40 transition-all shrink-0 shadow-md"
+              className="p-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white disabled:opacity-40 transition-all shrink-0 shadow-md"
             >
               <SendHorizontal className="w-4 h-4" />
             </button>
@@ -542,16 +610,16 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
           <TechnicalLabel>Intelligence Engine</TechnicalLabel>
           <div className="mt-2 p-3 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-2">
             <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-[#A1A1AA]">Fast Route</span>
+              <span className="text-[#A1A1AA]">L0 Deterministic</span>
+              <StatusIndicator status="online" label="ACTIVE (0 Tokens)" />
+            </div>
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-[#A1A1AA]">L1 Flash-Lite</span>
               <StatusIndicator status="online" label="READY" />
             </div>
             <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-[#A1A1AA]">Deep Route</span>
+              <span className="text-[#A1A1AA]">L2/L3 Flash + Vision</span>
               <StatusIndicator status="online" label="READY" />
-            </div>
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-[#A1A1AA]">Vision Triage</span>
-              <StatusIndicator status="online" label="ACTIVE" />
             </div>
           </div>
         </div>
@@ -565,7 +633,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
             </div>
             <div className="flex items-center gap-1.5 text-emerald-400">
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Token Masking Active</span>
+              <span>Free Tier Budget Guard (1,500 RPD)</span>
             </div>
           </div>
         </div>

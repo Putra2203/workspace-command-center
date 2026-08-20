@@ -40,7 +40,9 @@ export interface PlaneIssue {
   state?: any;
   state_detail?: { id?: string; name: string; group: string; color: string };
   priority?: string;
+  description?: string;
   description_html?: string;
+  description_stripped?: string;
   start_date?: string;
   target_date?: string;
   assignees?: string[];

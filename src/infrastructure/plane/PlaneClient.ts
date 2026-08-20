@@ -85,7 +85,7 @@ export class PlaneService {
   }
 
   /**
-   * Resolve project key/identifier or name to UUID
+   * Resolve project key/identifier or name to UUID with 5-tier fuzzy matching
    */
   async resolveProjectId(projectId: string): Promise<string> {
     if (!projectId || projectId.trim().toUpperCase() === 'ALL') {
@@ -97,24 +97,47 @@ export class PlaneService {
     }
 
     const projects = await this.listProjects();
-    const searchLower = projectId.toLowerCase();
+    const searchLower = projectId.trim().toLowerCase();
 
-    const found = projects.find(
-      (p) => p.id === projectId || p.identifier?.toLowerCase() === searchLower || p.name?.toLowerCase() === searchLower
+    // Tier 1: Exact identifier match (e.g. "BSJ")
+    const exactIdentifier = projects.find(p => p.identifier?.toLowerCase() === searchLower);
+    if (exactIdentifier) return exactIdentifier.id;
+
+    // Tier 2: Exact project name match (e.g. "BSJ Phase 4")
+    const exactName = projects.find(p => p.name?.toLowerCase() === searchLower);
+    if (exactName) return exactName.id;
+
+    // Tier 3: Substring match (project name includes query or query includes project name)
+    const substringMatch = projects.find(
+      p => (p.name && (p.name.toLowerCase().includes(searchLower) || searchLower.includes(p.name.toLowerCase()))) ||
+           (p.identifier && (p.identifier.toLowerCase().includes(searchLower) || searchLower.includes(p.identifier.toLowerCase())))
     );
+    if (substringMatch) return substringMatch.id;
 
-    if (found) {
-      return found.id;
-    }
+    // Tier 4: Phase number or keyword token match (e.g. "bsj phase 4" -> matches "BSJ" and "Phase 4")
+    const tokens = searchLower.split(/[\s\-_]+/).filter(t => t.length > 0);
+    const tokenMatch = projects.find(p => {
+      const pNameLower = (p.name || '').toLowerCase();
+      const pIdLower = (p.identifier || '').toLowerCase();
+      return tokens.every(tok => pNameLower.includes(tok) || pIdLower.includes(tok));
+    });
+    if (tokenMatch) return tokenMatch.id;
 
-    const available = projects.map((p) => `${p.identifier} (${p.name}) [id: ${p.id}]`).join(', ');
+    // Tier 5: Prefix/acronym match
+    const prefixMatch = projects.find(p => {
+      const pIdLower = (p.identifier || '').toLowerCase();
+      return tokens.some(tok => tok.startsWith(pIdLower) || pIdLower.startsWith(tok));
+    });
+    if (prefixMatch) return prefixMatch.id;
+
+    const available = projects.map((p) => `${p.identifier} ("${p.name}")`).join(', ');
     throw new Error(
       `Project '${projectId}' was not found. Available projects in this workspace: ${available || 'None'}`
     );
   }
 
   /**
-   * Resolve state name or group to state UUID
+   * Resolve state name or group to state UUID with Indonesian colloquial support
    */
   async resolveStateId(projectId: string, state: string): Promise<string> {
     if (this.isUUID(state)) {
@@ -123,21 +146,76 @@ export class PlaneService {
 
     const realProjectId = await this.resolveProjectId(projectId);
     const states = await this.listStates(realProjectId);
-    const searchLower = state.toLowerCase();
+    const searchLower = state.trim().toLowerCase();
 
+    // Map Indonesian colloquial terms to state groups
+    let targetGroup: string | null = null;
+    if (['selesai', 'beres', 'kelar', 'done', 'completed'].includes(searchLower)) {
+      targetGroup = 'completed';
+    } else if (['sedang jalan', 'sedang berjalan', 'on progress', 'wip', 'started', 'in progress', 'progres'].includes(searchLower)) {
+      targetGroup = 'started';
+    } else if (['todo', 'belum dimulai', 'unstarted', 'open'].includes(searchLower)) {
+      targetGroup = 'unstarted';
+    } else if (['backlog', 'tunda', 'nanti'].includes(searchLower)) {
+      targetGroup = 'backlog';
+    } else if (['batal', 'cancelled', 'canceled'].includes(searchLower)) {
+      targetGroup = 'cancelled';
+    }
+
+    // Exact state name match
     const exactName = states.find((s) => s.name?.toLowerCase() === searchLower || s.slug?.toLowerCase() === searchLower);
     if (exactName) return exactName.id;
 
+    // Group match based on normalized group
+    if (targetGroup) {
+      const groupMatch = states.find((s) => s.group?.toLowerCase() === targetGroup);
+      if (groupMatch) return groupMatch.id;
+    }
+
+    // Partial state name match
     const partialName = states.find((s) => s.name?.toLowerCase().includes(searchLower));
     if (partialName) return partialName.id;
 
-    const groupMatch = states.find((s) => s.group?.toLowerCase() === searchLower);
-    if (groupMatch) return groupMatch.id;
+    // Direct group match from input
+    const directGroupMatch = states.find((s) => s.group?.toLowerCase() === searchLower);
+    if (directGroupMatch) return directGroupMatch.id;
 
     const available = states.map((s) => `${s.name} (group: ${s.group})`).join(', ');
     throw new Error(
       `State '${state}' was not found for project '${projectId}'. Available states: ${available || 'None'}`
     );
+  }
+
+  /**
+   * Resolve member by name or email query
+   */
+  async resolveMemberId(projectId: string, memberQuery: string): Promise<string> {
+    if (this.isUUID(memberQuery)) {
+      return memberQuery;
+    }
+
+    const realProjectId = await this.resolveProjectId(projectId);
+    const members = await this.listMembers(realProjectId);
+    const searchLower = memberQuery.trim().toLowerCase();
+
+    const found = members.find(m => {
+      if (!m.member) return false;
+      const firstName = (m.member.first_name || '').toLowerCase();
+      const lastName = (m.member.last_name || '').toLowerCase();
+      const fullName = `${firstName} ${lastName}`.trim();
+      const email = (m.member.email || '').toLowerCase();
+
+      return fullName.includes(searchLower) ||
+             firstName.includes(searchLower) ||
+             lastName.includes(searchLower) ||
+             email.startsWith(searchLower);
+    });
+
+    if (found && (found.id || found.member?.id)) {
+      return found.id || found.member!.id;
+    }
+
+    throw new Error(`Member '${memberQuery}' was not found in project '${projectId}'.`);
   }
 
   /**

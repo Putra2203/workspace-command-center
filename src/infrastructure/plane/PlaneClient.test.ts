@@ -43,6 +43,7 @@ const { PlaneService } = await import('./PlaneClient');
 
 describe('PlaneService caching', () => {
   beforeEach(() => {
+    process.env.PLANE_WORKSPACE_SLUG = 'test-workspace';
     getMock.mockReset();
     getMock.mockResolvedValue({ data: [{ id: 'p1', name: 'Project 1', identifier: 'P1' }] });
     fakeDb.clear();

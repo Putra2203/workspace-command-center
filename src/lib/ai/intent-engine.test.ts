@@ -49,11 +49,17 @@ describe('parseIntent (regex fallback engine)', () => {
     expect(result.confidence).toBe(0);
   });
 
-  it('falls back to get_issue when an issue key is present but no known pattern matches', () => {
+  it('detects update_issue for moving task status', () => {
     const result = parseIntent('pindahkan task PROJECT1-31 ke Done');
-    expect(result.intent).toBe('get_issue');
+    expect(result.intent).toBe('update_issue');
     expect(result.entities.issueKey).toBe('PROJECT1-31');
     expect(result.entities.state).toBe('done');
+  });
+
+  it('falls back to get_issue when an issue key is present but no known pattern matches', () => {
+    const result = parseIntent('info detail PROJECT1-31');
+    expect(result.intent).toBe('get_issue');
+    expect(result.entities.issueKey).toBe('PROJECT1-31');
   });
 });
 

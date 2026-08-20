@@ -67,11 +67,21 @@ Respond in JSON format: { "title": "...", "description": "...", "priority": "...
 
     const enrichedMessage = cleanMessage + visionContext;
 
-    const intentResult = await parseIntentAsync(enrichedMessage, {
+    // Fetch workspace context concurrently
+    const [projects, currentUser] = await Promise.all([
+      planeService.listProjects().catch(() => []),
+      getCurrentUserContext(planeService).catch(() => null),
+    ]);
+
+    const availableProjects = projects.map(p => ({ id: p.id, identifier: p.identifier, name: p.name }));
+
+    const conversationContext = {
       activeProjectId: projectId,
       activeProjectKey: projectId,
-    });
+      availableProjects,
+    };
 
+    const intentResult = await parseIntentAsync(enrichedMessage, conversationContext);
 
     if (!intentResult.entities.projectKey && projectId) {
       intentResult.entities.projectKey = projectId;
@@ -80,10 +90,10 @@ Respond in JSON format: { "title": "...", "description": "...", "priority": "...
     const tier = classifyIntentTier(intentResult.intent);
 
     // Build plan asynchronously (supports decomposition & duplicate checks)
-    const plan = await buildActionPlanFromIntentAsync(intentResult, { activeProjectId: projectId, activeProjectKey: projectId });
+    const plan = await buildActionPlanFromIntentAsync(intentResult, conversationContext);
 
     // Calculate exact tokens (Gemini standard: ~3.8 chars/token + 258 tokens per vision image tile)
-    const imageTokenCount = image?.base64 ? 258 : 0;
+    const imageTokenCount = image?.base64Data ? 258 : 0;
     const inputTokens = Math.max(10, Math.ceil(cleanMessage.length / 3.8) + imageTokenCount);
     const outputContent = (intentResult.entities.chatReply || '') + (plan ? JSON.stringify(plan) : '');
     const outputTokens = Math.max(20, Math.ceil(outputContent.length / 3.8));
@@ -123,23 +133,25 @@ Respond in JSON format: { "title": "...", "description": "...", "priority": "...
       });
     }
 
-    // For read-only or chat intents, execute immediately without approval
-    const currentUser = await getCurrentUserContext(planeService);
+    // For read-only, chat, or direct query intents, execute immediately without approval
     const actionCards = await executeIntent(intentResult, planeService, {
-      userScope: userScope || 'my_tasks',
+      userScope: intentResult.entities.userScope || userScope || 'my_tasks',
       currentUserId: currentUser?.userId,
     });
 
     let reply = intentResult.entities.chatReply;
     if (!reply) {
       if (intentResult.intent === 'list_issues') {
-        reply = `Berikut adalah daftar issue untuk project **${intentResult.entities.projectKey || 'Anda'}**:`;
+        const projName = intentResult.entities.projectKey && intentResult.entities.projectKey !== 'ALL'
+          ? intentResult.entities.projectKey
+          : 'workspace';
+        reply = `Berikut adalah daftar task untuk **${projName}**:`;
       } else if (intentResult.intent === 'list_projects') {
         reply = 'Berikut adalah daftar project di workspace Plane Anda:';
       } else if (intentResult.intent === 'get_issue') {
-        reply = `Detail issue **${intentResult.entities.issueKey}**:`;
+        reply = `Detail task **${intentResult.entities.issueKey}**:`;
       } else if (intentResult.intent === 'help') {
-        reply = 'Saya dapat membantu Anda mengelola project dan task di Plane. Perintah yang bisa Anda coba:\n- *"Pecah feature login menjadi subtask"*\n- *"Buat task fix bug"*\n- *"Tampilkan daftar project"*';
+        reply = 'Saya dapat membantu Anda mengelola project dan task di Plane. Perintah yang bisa Anda coba:\n- *"Tampilkan tugasku"*\n- *"List task di project BSJ Phase 4"*\n- *"Pecah feature payment gateway menjadi subtask"*\n- *"Pindahkan task BSJ-12 ke Done"*';
       } else {
         reply = 'Perintah berhasil diproses.';
       }
