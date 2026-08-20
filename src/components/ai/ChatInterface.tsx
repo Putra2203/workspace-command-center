@@ -212,7 +212,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: data.analysis || data.message || data.reply || 'Mission analysis complete.',
+        content: data.reply || data.analysis || data.message || data.content || 'Mission analysis complete.',
         plan: data.plan || null,
         actionCards: data.actionCards || [],
       };
