@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import {
   SendHorizontal,
   ImagePlus,
@@ -60,6 +61,16 @@ const QUICK_CHIPS = [
   { label: '❤️ Health', cmd: '/health' },
   { label: '🧩 Decompose', cmd: '/plan ' },
 ];
+
+function ClientPortal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted || typeof document === 'undefined') return null;
+  return createPortal(children, document.body);
+}
 
 export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
   const { activeProjectId, activeProjectKey, pendingCommand, setPendingCommand } = useWorkspaceStore();
@@ -337,6 +348,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
             return (
               <button
                 key={i}
+                type="button"
                 onClick={() => handleOpenDrawer(part.toUpperCase())}
                 className="inline-flex items-center gap-0.5 px-1.5 py-0.5 mx-0.5 rounded bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/20 text-cyan-300 font-mono text-[11px] font-bold transition-colors cursor-pointer"
               >
@@ -372,6 +384,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
             <TechnicalLabel>Mission Log History</TechnicalLabel>
           </div>
           <button
+            type="button"
             onClick={createNewSession}
             className="p-1 rounded-md bg-[#10151C] border border-white/[0.08] hover:border-violet-500/40 text-[#71717A] hover:text-[#FAFAFA] transition-colors"
             title="New Session"
@@ -386,6 +399,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
             return (
               <button
                 key={s.id}
+                type="button"
                 onClick={() => loadSession(s)}
                 className={`w-full text-left p-2 rounded-lg text-xs transition-all flex items-center gap-2 ${
                   isCurrent
@@ -406,26 +420,32 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
       {/* Column 2: Center AI Command & Conversation Area */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative max-w-full">
         {/* Mobile Compact Sub-Header */}
-        <div className="lg:hidden flex items-center justify-between px-3 py-2 bg-[#080B10]/90 backdrop-blur border-b border-white/[0.06] shrink-0">
+        <div className="lg:hidden flex items-center justify-between px-3 py-2 bg-[#080B10]/95 backdrop-blur border-b border-white/[0.06] shrink-0 z-20">
           <button
-            onClick={() => setShowHistoryMobile(true)}
-            className="flex items-center gap-1.5 text-xs font-mono text-[#A1A1AA] px-2.5 py-1.5 rounded-lg bg-[#0B0F14] border border-white/[0.08] active:scale-95 transition-transform"
+            type="button"
+            onClick={() => {
+              loadSessions();
+              setShowHistoryMobile(true);
+            }}
+            className="flex items-center gap-1.5 text-xs font-mono text-[#A1A1AA] hover:text-[#FAFAFA] px-3 py-1.5 rounded-lg bg-[#0B0F14] border border-white/[0.10] active:scale-95 transition-all cursor-pointer"
           >
             <History className="w-3.5 h-3.5 text-violet-400" />
             <span>History ({sessions.length})</span>
           </button>
 
           <button
-            onClick={createNewSession}
-            className="px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-violet-600/20 to-indigo-600/20 text-violet-300 border border-violet-500/30 text-xs font-mono flex items-center gap-1 active:scale-95 transition-transform"
+            type="button"
+            onClick={() => createNewSession()}
+            className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600/20 to-indigo-600/20 text-violet-300 border border-violet-500/30 text-xs font-mono flex items-center gap-1 active:scale-95 transition-all cursor-pointer font-semibold"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New Chat</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setShowContextMobile(true)}
-            className="flex items-center gap-1.5 text-xs font-mono text-[#A1A1AA] px-2.5 py-1.5 rounded-lg bg-[#0B0F14] border border-white/[0.08] active:scale-95 transition-transform"
+            className="flex items-center gap-1.5 text-xs font-mono text-[#A1A1AA] hover:text-[#FAFAFA] px-3 py-1.5 rounded-lg bg-[#0B0F14] border border-white/[0.10] active:scale-95 transition-all cursor-pointer"
           >
             <Cpu className="w-3.5 h-3.5 text-cyan-400" />
             <span>Context</span>
@@ -458,8 +478,9 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                 ].map((item, idx) => (
                   <button
                     key={idx}
+                    type="button"
                     onClick={() => handleSend(item.cmd)}
-                    className="p-3 rounded-xl bg-[#0B0F14] border border-white/[0.06] hover:border-cyan-500/30 text-left text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors font-mono min-h-[44px] flex items-center"
+                    className="p-3 rounded-xl bg-[#0B0F14] border border-white/[0.06] hover:border-cyan-500/30 text-left text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors font-mono min-h-[44px] flex items-center cursor-pointer"
                   >
                     {item.label}
                   </button>
@@ -532,13 +553,14 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input Console & Thumb Carousel */}
-        <div className="p-2.5 sm:p-4 bg-[#080B10] border-t border-white/[0.06] shrink-0 space-y-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {/* Input Console & Thumb Carousel (Refined & Compact) */}
+        <div className="p-2 sm:p-3 bg-[#080B10]/95 backdrop-blur border-t border-white/[0.06] shrink-0 space-y-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
           {/* Horizontal Thumb Carousel */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none no-scrollbar">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none no-scrollbar">
             {QUICK_CHIPS.map((chip, i) => (
               <button
                 key={i}
+                type="button"
                 onClick={() => {
                   if (chip.cmd.endsWith(' ')) {
                     setInput(chip.cmd);
@@ -547,7 +569,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                     handleSend(chip.cmd);
                   }
                 }}
-                className="shrink-0 px-2.5 py-1 rounded-full bg-[#0B0F14] hover:bg-[#10151C] border border-white/[0.08] hover:border-cyan-500/30 text-[11px] font-mono text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors flex items-center gap-1 active:scale-95"
+                className="shrink-0 px-2 py-0.5 rounded-md bg-[#0B0F14] hover:bg-[#10151C] border border-white/[0.08] hover:border-cyan-500/30 text-[10px] sm:text-[11px] font-mono text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors flex items-center gap-1 active:scale-95 cursor-pointer"
               >
                 <span>{chip.label}</span>
               </button>
@@ -556,22 +578,23 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
 
           {/* Image Attachment Preview */}
           {imageAttachment && (
-            <div className="flex items-center gap-2 p-2 bg-[#0B0F14] border border-violet-500/30 rounded-lg w-fit">
-              <span className="text-[11px] font-mono text-violet-300">
+            <div className="flex items-center gap-2 p-1.5 bg-[#0B0F14] border border-violet-500/30 rounded-lg w-fit">
+              <span className="text-[10px] font-mono text-violet-300">
                 📷 {imageAttachment.name}
               </span>
               <button
+                type="button"
                 onClick={() => setImageAttachment(null)}
-                className="text-[#71717A] hover:text-rose-400 p-1"
+                className="text-[#71717A] hover:text-rose-400 p-0.5 cursor-pointer"
                 aria-label="Remove image"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-3 h-3" />
               </button>
             </div>
           )}
 
-          {/* Textarea Input Bar (16px font on mobile prevents iOS Safari zoom) */}
-          <div className="flex items-end gap-2 bg-[#0B0F14] border border-white/[0.08] focus-within:border-cyan-500/40 rounded-2xl p-1.5 sm:p-2 transition-colors">
+          {/* Textarea Input Bar (Sleek, Compact, Cyber-Terminal Proportional) */}
+          <div className="flex items-center gap-1.5 bg-[#0B0F14] border border-white/[0.08] focus-within:border-cyan-500/40 rounded-xl px-2 py-1 transition-colors">
             <input
               type="file"
               ref={fileInputRef}
@@ -584,12 +607,13 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
             />
 
             <button
+              type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-2.5 rounded-xl text-[#71717A] hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors shrink-0 min-h-[40px] min-w-[40px] flex items-center justify-center"
+              className="p-1 rounded-lg text-[#71717A] hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors shrink-0 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center cursor-pointer"
               title="Upload Screenshot (Vision Analysis)"
               aria-label="Upload Screenshot"
             >
-              <ImagePlus className="w-5 h-5 sm:w-4 sm:h-4" />
+              <ImagePlus className="w-4 h-4" />
             </button>
 
             <textarea
@@ -603,17 +627,18 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                   handleSend();
                 }
               }}
-              placeholder="Ask AI or type /today, /overdue, /plan..."
-              className="flex-1 bg-transparent border-none outline-none text-[16px] sm:text-xs text-[#FAFAFA] placeholder-[#52525B] font-mono resize-none py-2 px-1 max-h-32 leading-relaxed"
+              placeholder="Ask AI or /today, /overdue, /plan..."
+              className="flex-1 bg-transparent border-none outline-none text-xs sm:text-xs text-[#FAFAFA] placeholder-[#52525B] font-mono resize-none py-1.5 px-1.5 max-h-28 leading-snug"
             />
 
             <button
+              type="button"
               onClick={() => handleSend()}
               disabled={(!input.trim() && !imageAttachment) || isLoading}
-              className="p-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white disabled:opacity-40 transition-all shrink-0 shadow-md min-h-[40px] min-w-[40px] flex items-center justify-center active:scale-95"
+              className="p-1 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white disabled:opacity-30 transition-all shrink-0 shadow-sm w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center active:scale-95 cursor-pointer"
               aria-label="Send"
             >
-              <SendHorizontal className="w-4 h-4" />
+              <SendHorizontal className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -673,156 +698,194 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
       </aside>
 
       {/* Mobile Mission Log History Bottom Sheet */}
-      <AnimatePresence>
-        {showHistoryMobile && (
-          <div className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true">
+      <ClientPortal>
+        <AnimatePresence mode="wait">
+          {showHistoryMobile && (
             <motion.div
+              key="history-modal-root"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-              onClick={() => setShowHistoryMobile(false)}
-            />
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="relative w-full bg-[#080B10] border-t border-white/[0.10] rounded-t-3xl shadow-2xl p-5 space-y-4 max-h-[75vh] flex flex-col pb-[max(2rem,env(safe-area-inset-bottom))]"
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[99999] flex flex-col justify-end pointer-events-auto"
+              role="dialog"
+              aria-modal="true"
             >
-              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto -mt-2 mb-1" />
-              <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-                <div className="flex items-center gap-2">
-                  <History className="w-4 h-4 text-violet-400" />
-                  <span className="text-xs font-mono font-bold uppercase text-[#FAFAFA]">
-                    Mission History ({sessions.length})
-                  </span>
-                </div>
-                <button
-                  onClick={() => setShowHistoryMobile(false)}
-                  className="w-7 h-7 rounded-lg border border-white/[0.08] flex items-center justify-center text-[#71717A] hover:text-[#FAFAFA]"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+              {/* Fullscreen Backdrop */}
+              <div
+                className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-pointer"
+                onClick={() => setShowHistoryMobile(false)}
+              />
 
-              <div className="flex-1 overflow-y-auto space-y-1.5 scrollbar-thin">
-                {sessions.map((s) => {
-                  const isCurrent = s.id === sessionId;
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => loadSession(s)}
-                      className={`w-full text-left p-3 rounded-xl text-xs transition-all flex items-center justify-between min-h-[44px] ${
-                        isCurrent
-                          ? 'bg-violet-500/10 border border-violet-500/30 text-violet-300 font-medium'
-                          : 'bg-[#0B0F14] border border-white/[0.04] text-[#A1A1AA] hover:text-[#FAFAFA]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
-                        <MessageSquare className="w-4 h-4 shrink-0 text-violet-400" />
-                        <span className="truncate font-mono text-xs">
-                          {s.title || 'Untitled Operation'}
-                        </span>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-[#52525B] shrink-0" />
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                onClick={() => {
-                  createNewSession();
-                  setShowHistoryMobile(false);
-                }}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-mono text-xs font-semibold flex items-center justify-center gap-2 shadow-lg min-h-[44px]"
+              {/* Slide-Up Bottom Sheet Card */}
+              <motion.div
+                key="history-sheet-card"
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative z-10 w-full bg-[#080B10] border-t border-white/[0.12] rounded-t-3xl shadow-2xl p-5 space-y-4 max-h-[80vh] flex flex-col pb-[max(2rem,env(safe-area-inset-bottom))]"
               >
-                <Plus className="w-4 h-4" />
-                <span>Start New Mission Session</span>
-              </button>
+                <div className="w-10 h-1 bg-white/20 rounded-full mx-auto -mt-2 mb-1 cursor-pointer" onClick={() => setShowHistoryMobile(false)} />
+                <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                  <div className="flex items-center gap-2">
+                    <History className="w-4 h-4 text-violet-400" />
+                    <span className="text-xs font-mono font-bold uppercase text-[#FAFAFA]">
+                      Mission History ({sessions.length})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowHistoryMobile(false)}
+                    className="w-8 h-8 rounded-lg border border-white/[0.08] hover:bg-white/[0.06] flex items-center justify-center text-[#71717A] hover:text-[#FAFAFA] cursor-pointer"
+                    aria-label="Close History"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-1.5 scrollbar-thin">
+                  {sessions.length === 0 ? (
+                    <div className="p-4 text-center text-xs font-mono text-[#71717A] italic bg-[#0B0F14] rounded-xl border border-white/[0.04]">
+                      No previous chat sessions.
+                    </div>
+                  ) : (
+                    sessions.map((s) => {
+                      const isCurrent = s.id === sessionId;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => loadSession(s)}
+                          className={`w-full text-left p-3 rounded-xl text-xs transition-all flex items-center justify-between min-h-[44px] cursor-pointer ${
+                            isCurrent
+                              ? 'bg-violet-500/10 border border-violet-500/30 text-violet-300 font-medium'
+                              : 'bg-[#0B0F14] border border-white/[0.04] text-[#A1A1AA] hover:text-[#FAFAFA]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
+                            <MessageSquare className="w-4 h-4 shrink-0 text-violet-400" />
+                            <span className="truncate font-mono text-xs">
+                              {s.title || 'Untitled Operation'}
+                            </span>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-[#52525B] shrink-0" />
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    createNewSession();
+                    setShowHistoryMobile(false);
+                  }}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-mono text-xs font-semibold flex items-center justify-center gap-2 shadow-lg min-h-[44px] cursor-pointer active:scale-98 transition-transform"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Start New Mission Session</span>
+                </button>
+              </motion.div>
             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
+      </ClientPortal>
 
       {/* Mobile Mission Context Bottom Sheet */}
-      <AnimatePresence>
-        {showContextMobile && (
-          <div className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true">
+      <ClientPortal>
+        <AnimatePresence mode="wait">
+          {showContextMobile && (
             <motion.div
+              key="context-modal-root"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-              onClick={() => setShowContextMobile(false)}
-            />
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-              className="relative w-full bg-[#080B10] border-t border-white/[0.10] rounded-t-3xl shadow-2xl p-5 space-y-4 max-h-[75vh] flex flex-col pb-[max(2rem,env(safe-area-inset-bottom))]"
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-[99999] flex flex-col justify-end pointer-events-auto"
+              role="dialog"
+              aria-modal="true"
             >
-              <div className="w-10 h-1 bg-white/20 rounded-full mx-auto -mt-2 mb-1" />
-              <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-                <div className="flex items-center gap-2">
-                  <Cpu className="w-4 h-4 text-cyan-400" />
-                  <span className="text-xs font-mono font-bold uppercase text-[#FAFAFA]">
-                    Mission & AI Context
-                  </span>
-                </div>
-                <button
-                  onClick={() => setShowContextMobile(false)}
-                  className="w-7 h-7 rounded-lg border border-white/[0.08] flex items-center justify-center text-[#71717A] hover:text-[#FAFAFA]"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
+              {/* Fullscreen Backdrop */}
+              <div
+                className="absolute inset-0 bg-black/80 backdrop-blur-md cursor-pointer"
+                onClick={() => setShowContextMobile(false)}
+              />
 
-              <div className="space-y-3 overflow-y-auto">
-                <div className="p-3.5 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-2">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-[#71717A]">ACTIVE MISSION</span>
-                    <span className="font-bold text-cyan-400">{activeProjectKey || 'ALL'}</span>
+              {/* Slide-Up Bottom Sheet Card */}
+              <motion.div
+                key="context-sheet-card"
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 280 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative z-10 w-full bg-[#080B10] border-t border-white/[0.12] rounded-t-3xl shadow-2xl p-5 space-y-4 max-h-[80vh] flex flex-col pb-[max(2rem,env(safe-area-inset-bottom))]"
+              >
+                <div className="w-10 h-1 bg-white/20 rounded-full mx-auto -mt-2 mb-1 cursor-pointer" onClick={() => setShowContextMobile(false)} />
+                <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                  <div className="flex items-center gap-2">
+                    <Cpu className="w-4 h-4 text-cyan-400" />
+                    <span className="text-xs font-mono font-bold uppercase text-[#FAFAFA]">
+                      Mission & AI Context
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-[#71717A]">TOTAL WORK ITEMS</span>
-                    <span className="font-bold text-[#FAFAFA]">{activeOperationsCount}</span>
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-2.5">
-                  <div className="text-[10px] font-mono uppercase text-[#71717A]">Intelligence Engine</div>
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-[#A1A1AA]">L0 Deterministic</span>
-                    <StatusIndicator status="online" label="ACTIVE (0 Tokens)" />
-                  </div>
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-[#A1A1AA]">L1 Flash-Lite</span>
-                    <StatusIndicator status="online" label="READY" />
-                  </div>
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-[#A1A1AA]">L2/L3 Flash + Vision</span>
-                    <StatusIndicator status="online" label="READY" />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowContextMobile(false)}
+                    className="w-8 h-8 rounded-lg border border-white/[0.08] hover:bg-white/[0.06] flex items-center justify-center text-[#71717A] hover:text-[#FAFAFA] cursor-pointer"
+                    aria-label="Close Context"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-2 text-[11px] font-mono text-[#71717A]">
-                  <div className="flex items-center gap-1.5 text-emerald-400">
-                    <ShieldCheck className="w-4 h-4 shrink-0" />
-                    <span>PII Scrubber Active</span>
+                <div className="space-y-3 overflow-y-auto">
+                  <div className="p-3.5 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-2">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-[#71717A]">ACTIVE MISSION</span>
+                      <span className="font-bold text-cyan-400">{activeProjectKey || 'ALL'}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-[#71717A]">TOTAL WORK ITEMS</span>
+                      <span className="font-bold text-[#FAFAFA]">{activeOperationsCount}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 text-emerald-400">
-                    <ShieldCheck className="w-4 h-4 shrink-0" />
-                    <span>Free Tier Budget Guard (1,500 RPD)</span>
+
+                  <div className="p-3.5 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-2.5">
+                    <div className="text-[10px] font-mono uppercase text-[#71717A]">Intelligence Engine</div>
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-[#A1A1AA]">L0 Deterministic</span>
+                      <StatusIndicator status="online" label="ACTIVE (0 Tokens)" />
+                    </div>
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-[#A1A1AA]">L1 Flash-Lite</span>
+                      <StatusIndicator status="online" label="READY" />
+                    </div>
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-[#A1A1AA]">L2/L3 Flash + Vision</span>
+                      <StatusIndicator status="online" label="READY" />
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-2 text-[11px] font-mono text-[#71717A]">
+                    <div className="flex items-center gap-1.5 text-emerald-400">
+                      <ShieldCheck className="w-4 h-4 shrink-0" />
+                      <span>PII Scrubber Active</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-emerald-400">
+                      <ShieldCheck className="w-4 h-4 shrink-0" />
+                      <span>Free Tier Budget Guard (1,500 RPD)</span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+          )}
+        </AnimatePresence>
+      </ClientPortal>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle2, Clock, User, Tag, ArrowUpRight, Loader2, AlertCircle, Check } from 'lucide-react';
 import { PlaneIssue } from '@/types/plane';
@@ -20,11 +21,16 @@ export function IssuePreviewDrawer({
   onClose,
   onIssueUpdated,
 }: IssuePreviewDrawerProps) {
+  const [mounted, setMounted] = useState(false);
   const [issue, setIssue] = useState<PlaneIssue | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (isOpen && issueKey) {
@@ -86,17 +92,19 @@ export function IssuePreviewDrawer({
     }
   };
 
-  return (
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-stretch sm:justify-end">
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-stretch sm:justify-end">
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 transition-opacity"
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm z-40 transition-opacity"
           />
 
           {/* Drawer / Bottom Sheet Container */}
@@ -227,6 +235,7 @@ export function IssuePreviewDrawer({
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

@@ -7,7 +7,10 @@ export async function GET(request: NextRequest) {
   // If sessionId is provided, return messages for that session
   if (sessionId) {
     try {
-      const messages = await prisma.chatMessage.findMany({
+      if (!prisma || !(prisma as any).chatMessage) {
+        return Response.json({ messages: [], fallback: true });
+      }
+      const messages = await (prisma as any).chatMessage.findMany({
         where: { sessionId },
         orderBy: { createdAt: 'asc' },
       });
@@ -20,7 +23,10 @@ export async function GET(request: NextRequest) {
 
   // Otherwise return session list
   try {
-    const sessions = await prisma.chatSession.findMany({
+    if (!prisma || !(prisma as any).chatSession) {
+      return Response.json({ sessions: [], fallback: true });
+    }
+    const sessions = await (prisma as any).chatSession.findMany({
       orderBy: { updatedAt: 'desc' },
       take: 20,
       include: {
@@ -36,8 +42,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    if (!prisma || !(prisma as any).chatSession) {
+      return Response.json({
+        session: { id: `local-${Date.now()}`, title: 'New Conversation', fallback: true },
+        fallback: true,
+      });
+    }
     const body = await request.json().catch(() => ({}));
-    const session = await prisma.chatSession.create({
+    const session = await (prisma as any).chatSession.create({
       data: {
         title: body.title || 'New Conversation',
         projectId: body.projectId || null,
@@ -62,12 +74,12 @@ export async function PUT(request: NextRequest) {
       return Response.json({ error: 'sessionId, role, and content are required' }, { status: 400 });
     }
 
-    // Skip DB persist for local fallback sessions
-    if (sessionId.startsWith('local-')) {
+    // Skip DB persist for local fallback sessions or uninitialized prisma
+    if (sessionId.startsWith('local-') || !prisma || !(prisma as any).chatMessage) {
       return Response.json({ message: { id: `local-msg-${Date.now()}`, fallback: true } });
     }
 
-    const message = await prisma.chatMessage.create({
+    const message = await (prisma as any).chatMessage.create({
       data: {
         sessionId,
         role,
@@ -79,10 +91,10 @@ export async function PUT(request: NextRequest) {
     });
 
     // Auto-update session title from first user message
-    if (role === 'user') {
-      const msgCount = await prisma.chatMessage.count({ where: { sessionId } });
+    if (role === 'user' && (prisma as any).chatSession) {
+      const msgCount = await (prisma as any).chatMessage.count({ where: { sessionId } });
       if (msgCount === 1) {
-        await prisma.chatSession.update({
+        await (prisma as any).chatSession.update({
           where: { id: sessionId },
           data: { title: content.slice(0, 80) },
         });
