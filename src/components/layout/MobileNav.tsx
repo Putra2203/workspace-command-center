@@ -46,15 +46,10 @@ export function MobileNav() {
   const handleLogout = async () => {
     setMoreOpen(false);
     setIsLoggingOut(true);
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } catch (err) {
-      console.error('Logout error:', err);
-    }
+    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
     setTimeout(() => {
       router.push('/login');
-      router.refresh();
-    }, 1000);
+    }, 550);
   };
 
   const handleNavigate = (path: string) => {

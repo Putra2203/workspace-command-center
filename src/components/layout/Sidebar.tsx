@@ -323,15 +323,10 @@ export function Sidebar({ projects }: SidebarProps) {
           <button
             onClick={async () => {
               setIsLoggingOut(true);
-              try {
-                await fetch('/api/auth/logout', { method: 'POST' });
-              } catch (err) {
-                console.error('Logout failed:', err);
-              }
+              fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
               setTimeout(() => {
                 router.push('/login');
-                router.refresh();
-              }, 1000);
+              }, 550);
             }}
             title="Keluar / Logout"
             className="p-1.5 rounded-lg text-[#71717A] hover:bg-rose-500/10 hover:text-rose-400 transition-colors cursor-pointer"

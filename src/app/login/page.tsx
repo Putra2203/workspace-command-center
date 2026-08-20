@@ -36,8 +36,7 @@ function LoginForm() {
         setIsAuthorized(true);
         setTimeout(() => {
           router.push(redirectTarget);
-          router.refresh();
-        }, 900);
+        }, 550);
       } else {
         setErrorMessage(data.error || 'Username atau password tidak valid');
       }
@@ -51,23 +50,24 @@ function LoginForm() {
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.94, y: 15 }}
+      initial={{ opacity: 0, scale: 0.96, y: 10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ type: 'spring', damping: 24, stiffness: 260 }}
-      className="relative w-full max-w-sm sm:max-w-md bg-[#0B0F14]/90 border border-white/[0.08] rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6 backdrop-blur-md overflow-hidden"
+      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+      className="relative w-full max-w-sm sm:max-w-md bg-[#0B0F14]/95 border border-white/[0.08] rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6 transform-gpu will-change-transform will-change-opacity overflow-hidden"
     >
       <AnimatePresence mode="wait">
         {isAuthorized ? (
           /* Authorization Success HUD */
           <motion.div
             key="authorized-hud"
-            initial={{ opacity: 0, scale: 0.9 }}
+            initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
-            className="py-6 text-center space-y-5"
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="py-6 text-center space-y-5 transform-gpu"
           >
-            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-[0_0_30px_rgba(52,211,153,0.25)]">
-              <CheckCircle2 className="w-7 h-7 text-emerald-400 animate-bounce" />
+            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(52,211,153,0.2)]">
+              <CheckCircle2 className="w-7 h-7 text-emerald-400" />
             </div>
 
             <div className="space-y-1 font-mono">
@@ -95,13 +95,13 @@ function LoginForm() {
               </div>
             </div>
 
-            {/* Launch Progress Track */}
+            {/* Launch Progress Track (Compositor-Only ScaleX Transform for 60/120 FPS) */}
             <div className="w-full h-1.5 bg-[#18181B] rounded-full overflow-hidden relative">
               <motion.div
-                initial={{ width: '0%' }}
-                animate={{ width: '100%' }}
-                transition={{ duration: 0.8, ease: 'easeInOut' }}
-                className="h-full bg-gradient-to-r from-cyan-400 via-emerald-400 to-violet-500 rounded-full shadow-[0_0_12px_rgba(56,189,248,0.5)]"
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                className="h-full w-full bg-gradient-to-r from-cyan-400 via-emerald-400 to-violet-500 rounded-full origin-left transform-gpu"
               />
             </div>
           </motion.div>
@@ -110,25 +110,15 @@ function LoginForm() {
           <motion.div
             key="login-form"
             initial={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="space-y-6"
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.15 }}
+            className="space-y-6 transform-gpu"
           >
             {/* Brand Header with Mission Control Beacon */}
             <div className="text-center space-y-3">
               <div className="relative flex items-center justify-center mx-auto mb-1">
-                {/* Subtle Outer Cyan Orbit */}
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{
-                    duration: 12,
-                    repeat: Infinity,
-                    ease: 'linear',
-                  }}
-                  className="w-16 h-16 rounded-xl border border-cyan-500/20 shadow-[0_0_20px_rgba(56,189,248,0.15)]"
-                />
-
                 {/* Central Beacon Box */}
-                <div className="absolute w-11 h-11 rounded-lg bg-[#10151C] border border-cyan-400/40 text-cyan-400 flex items-center justify-center shadow-inner">
+                <div className="w-12 h-12 rounded-xl bg-[#10151C] border border-cyan-400/40 text-cyan-400 flex items-center justify-center shadow-[0_0_20px_rgba(56,189,248,0.2)]">
                   <Radio className="w-5 h-5 text-cyan-400 animate-pulse" />
                 </div>
               </div>
@@ -138,7 +128,7 @@ function LoginForm() {
                   Erdavid Work OS
                 </h1>
                 <div className="text-[10px] font-mono uppercase text-cyan-400 tracking-[0.16em] flex items-center justify-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
                   <span>MISSION CONTROL GATEWAY</span>
                 </div>
               </div>
@@ -147,8 +137,9 @@ function LoginForm() {
             {/* Error Alert */}
             {errorMessage && (
               <motion.div
-                initial={{ opacity: 0, y: -5 }}
+                initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.15 }}
                 className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 flex items-start gap-2.5 text-xs text-rose-400 font-mono"
               >
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -170,6 +161,7 @@ function LoginForm() {
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="Username..."
                     required
+                    autoComplete="username"
                     className="w-full bg-[#10151C] border border-white/[0.08] rounded-xl pl-9 pr-3 py-2.5 text-xs text-[#FAFAFA] placeholder-[#52525B] outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all font-mono"
                   />
                 </div>
@@ -187,6 +179,7 @@ function LoginForm() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Password..."
                     required
+                    autoComplete="current-password"
                     className="w-full bg-[#10151C] border border-white/[0.08] rounded-xl pl-9 pr-3 py-2.5 text-xs text-[#FAFAFA] placeholder-[#52525B] outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400/30 transition-all font-mono"
                   />
                 </div>
@@ -195,7 +188,7 @@ function LoginForm() {
               <button
                 type="submit"
                 disabled={!username.trim() || !password.trim() || isLoading}
-                className="w-full py-2.5 px-4 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-[#05070A] font-bold text-xs font-mono flex items-center justify-center gap-2 transition-all shadow-[0_0_25px_rgba(56,189,248,0.25)] disabled:opacity-40 disabled:cursor-not-allowed mt-2 cursor-pointer active:scale-[0.98]"
+                className="w-full py-2.5 px-4 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-[#05070A] font-bold text-xs font-mono flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(56,189,248,0.25)] disabled:opacity-40 disabled:cursor-not-allowed mt-2 cursor-pointer active:scale-[0.98]"
               >
                 {isLoading ? (
                   <>
@@ -226,9 +219,16 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <div className="min-h-screen w-full bg-[#05070A] bg-technical-grid flex items-center justify-center p-4 selection:bg-cyan-500/30 relative overflow-hidden">
-      {/* Background Ambient Glowing Lights */}
-      <div className="fixed top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-cyan-500/10 rounded-full blur-[140px] pointer-events-none" />
-      <div className="fixed bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-[500px] h-[500px] bg-violet-500/10 rounded-full blur-[140px] pointer-events-none" />
+      {/* Zero-Overhead Hardware Accelerated Radial Glow (Replaces Heavy Multi-Pass Blur) */}
+      <div
+        className="fixed inset-0 pointer-events-none transform-gpu"
+        style={{
+          background: `
+            radial-gradient(circle 320px at 25% 30%, rgba(56, 189, 248, 0.08), transparent 70%),
+            radial-gradient(circle 320px at 75% 70%, rgba(139, 92, 246, 0.08), transparent 70%)
+          `,
+        }}
+      />
 
       <Suspense
         fallback={
