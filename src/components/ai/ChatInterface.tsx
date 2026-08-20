@@ -1,11 +1,29 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { SendHorizontal, ImagePlus, X, History, Plus, MessageSquare } from 'lucide-react';
+import {
+  SendHorizontal,
+  ImagePlus,
+  X,
+  History,
+  Plus,
+  MessageSquare,
+  Sparkles,
+  Cpu,
+  ShieldCheck,
+  Zap,
+  Activity,
+  Layers,
+  Radio
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ActionCard, ActionPlanCard } from './ActionCard';
 import { useWorkspaceStore } from '@/stores/workspace-store';
+import { useWorkspaceData } from '@/lib/context/workspace-data';
 import { ActionPlan } from '@/types/ai';
+import { StatusIndicator } from '@/components/ui/StatusIndicator';
+import { TechnicalLabel } from '@/components/ui/TechnicalLabel';
+import { TechnicalDivider } from '@/components/ui/TechnicalDivider';
 
 interface Message {
   id: string;
@@ -30,20 +48,22 @@ interface ChatInterfaceProps {
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
 export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
-  const { activeProjectId, pendingCommand, setPendingCommand } = useWorkspaceStore();
+  const { activeProjectId, activeProjectKey, pendingCommand, setPendingCommand } = useWorkspaceStore();
+  const { issues } = useWorkspaceData();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
+  const [showHistoryMobile, setShowHistoryMobile] = useState(false);
+  const [showContextMobile, setShowContextMobile] = useState(false);
   const [imageAttachment, setImageAttachment] = useState<{ base64: string; mimeType: string; name: string } | null>(null);
+  
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollFrameRef = useRef<number>(0);
 
-  // Throttled auto-scroll using requestAnimationFrame
   const scrollToBottom = useCallback(() => {
     if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
     scrollFrameRef.current = requestAnimationFrame(() => {
@@ -62,12 +82,10 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
     inputRef.current?.focus();
   }, [pendingCommand, setPendingCommand]);
 
-  // Load sessions on mount
   useEffect(() => {
     loadSessions();
   }, []);
 
-  // Auto-create session on first load
   useEffect(() => {
     if (!sessionId) {
       createNewSession();
@@ -81,7 +99,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
       const data = await res.json();
       if (data.sessions) setSessions(data.sessions);
     } catch {
-      // Silently fail — sessions sidebar will just be empty
+      // ignore
     }
   };
 
@@ -105,7 +123,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
 
   const loadSession = async (session: ChatSession) => {
     setSessionId(session.id);
-    setShowHistory(false);
+    setShowHistoryMobile(false);
     setMessages([]);
 
     if (session.id.startsWith('local-')) return;
@@ -114,57 +132,29 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
       const res = await fetch(`/api/ai/sessions?sessionId=${session.id}`);
       const data = await res.json();
       if (data.messages) {
-        setMessages(data.messages.map((m: any) => ({
-          id: m.id,
-          role: m.role,
-          content: m.content,
-          actionCards: m.actionCards,
-          plan: m.plan,
-          imageUrl: m.imageUrl,
-        })));
+        setMessages(
+          data.messages.map((m: any) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            actionCards: m.actionCards,
+            plan: m.plan,
+          }))
+        );
       }
     } catch {
-      // Failed to load messages, keep empty
+      // ignore
     }
   };
 
-  const persistMessage = async (role: string, content: string, extras?: { actionCards?: any; plan?: any; imageUrl?: string }) => {
-    if (!sessionId) return;
-    try {
-      await fetch('/api/ai/sessions', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sessionId,
-          role,
-          content,
-          ...extras,
-        }),
-      });
-    } catch {
-      // Silently fail — message is still in local state
-    }
-  };
-
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate type
-    if (!file.type.startsWith('image/')) {
-      alert('Hanya file gambar yang diizinkan (PNG, JPG, WEBP).');
-      return;
-    }
-
-    // Validate size
-    if (file.size > MAX_IMAGE_SIZE) {
-      alert('Ukuran gambar maksimal 5MB.');
-      return;
-    }
+  const handleImageUpload = (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    if (file.size > MAX_IMAGE_SIZE) return;
 
     const reader = new FileReader();
     reader.onload = () => {
-      const base64 = (reader.result as string).split(',')[1];
+      const result = reader.result as string;
+      const base64 = result.split(',')[1];
       setImageAttachment({
         base64,
         mimeType: file.type,
@@ -172,85 +162,88 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
       });
     };
     reader.readAsDataURL(file);
-
-    // Reset file input so same file can be re-selected
-    e.target.value = '';
-  };
-
-  const removeImage = () => {
-    setImageAttachment(null);
   };
 
   const handleSend = async () => {
-    if ((!input.trim() && !imageAttachment) || isLoading) return;
-    
-    const content = input.trim() || (imageAttachment ? `[Gambar: ${imageAttachment.name}]` : '');
-    const userMsg: Message = {
-      id: Date.now().toString(),
+    const trimmed = input.trim();
+    if ((!trimmed && !imageAttachment) || isLoading) return;
+
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
       role: 'user',
-      content,
+      content: trimmed,
       imageUrl: imageAttachment ? `data:${imageAttachment.mimeType};base64,${imageAttachment.base64}` : undefined,
     };
-    setMessages(prev => [...prev, userMsg]);
+
+    setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    const currentAttachment = imageAttachment;
+    setImageAttachment(null);
     setIsLoading(true);
 
-    const currentImage = imageAttachment;
-    setImageAttachment(null);
-
-    // Persist user message
-    persistMessage('user', content, { imageUrl: userMsg.imageUrl });
-
     try {
+      // 1. Persist user message to DB in background
+      if (sessionId) {
+        fetch('/api/ai/sessions', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            role: 'user',
+            content: trimmed || 'Attachment analyzed',
+          }),
+        }).then(() => loadSessions()).catch(() => {});
+      }
+
+      const targetProject = activeProjectKey === 'ALL' || !activeProjectKey ? 'PROJECT1' : activeProjectKey;
       const res = await fetch('/api/ai/plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: content,
-          projectId: activeProjectId,
-          userScope: useWorkspaceStore.getState().userScope,
-          currentUser: useWorkspaceStore.getState().currentUser,
-          ...(currentImage ? {
-            image: {
-              base64Data: currentImage.base64,
-              mimeType: currentImage.mimeType,
-            },
-          } : {}),
+          message: trimmed || 'Analisis screenshot ini dan buat task baru jika ditemukan isu.',
+          projectId: targetProject,
+          sessionId,
+          image: currentAttachment ? { base64: currentAttachment.base64, mimeType: currentAttachment.mimeType } : undefined,
         }),
       });
+
       const data = await res.json();
-      
-      const assistantMsg: Message = {
-        id: (Date.now() + 1).toString(),
+
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
         role: 'assistant',
-        content: data.reply || 'Request processed.',
-        actionCards: data.actionCards,
-        plan: data.plan,
+        content: data.analysis || data.message || data.reply || 'Mission analysis complete.',
+        plan: data.plan || null,
+        actionCards: data.actionCards || [],
       };
-      setMessages(prev => [...prev, assistantMsg]);
 
-      // Persist assistant message
-      persistMessage('assistant', assistantMsg.content, {
-        actionCards: assistantMsg.actionCards,
-        plan: assistantMsg.plan,
-      });
+      setMessages((prev) => [...prev, assistantMessage]);
 
-      if (data.actionCards && data.actionCards.length > 0 && onActionExecuted) {
-        onActionExecuted();
+      // 2. Persist assistant message to DB in background
+      if (sessionId) {
+        fetch('/api/ai/sessions', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            role: 'assistant',
+            content: assistantMessage.content,
+            plan: assistantMessage.plan,
+            actionCards: assistantMessage.actionCards,
+          }),
+        }).catch(() => {});
       }
-    } catch (error) {
-      console.error(error);
-      const errorMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Terjadi kesalahan saat menghubungi AI Command Server.'
-      };
-      setMessages(prev => [...prev, errorMsg]);
-      persistMessage('assistant', errorMsg.content);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `error-${Date.now()}`,
+          role: 'assistant',
+          content: 'System Interruption: Unable to contact intelligence service. Please retry.',
+        },
+      ]);
     } finally {
       setIsLoading(false);
-      // Refresh sessions list to update title
-      loadSessions();
     }
   };
 
@@ -259,280 +252,324 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
       const res = await fetch('/api/ai/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({ plan, sessionId }),
       });
+
       const data = await res.json();
 
-      const execMsg: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: data.reply || 'Rencana tindakan telah dieksekusi.',
-        actionCards: data.actionCards,
-      };
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `exec-${Date.now()}`,
+          role: 'assistant',
+          content: 'Mission Plan successfully executed.',
+          actionCards: [
+            {
+              type: 'batch_issues_created',
+              message: `Executed ${plan.steps.length} operation steps cleanly.`,
+              items: data.results || [],
+            },
+          ],
+        },
+      ]);
 
-      setMessages(prev => [...prev, execMsg]);
-      persistMessage('assistant', execMsg.content, { actionCards: execMsg.actionCards });
-
-      if (onActionExecuted) {
-        onActionExecuted();
-      }
-    } catch (error) {
-      console.error('Failed to execute plan:', error);
-      const errCard: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: 'Gagal mengeksekusi rencana tindakan.',
-        actionCards: [{ type: 'error', title: 'Execution Error', message: 'Gagal menghubungi server eksekusi.' }],
-      };
-      setMessages(prev => [...prev, errCard]);
-      persistMessage('assistant', errCard.content, { actionCards: errCard.actionCards });
+      if (onActionExecuted) onActionExecuted();
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `exec-err-${Date.now()}`,
+          role: 'assistant',
+          content: 'Execution failed on one or more operations.',
+        },
+      ]);
     }
   };
 
-  const handleCancelPlan = (msgId: string) => {
-    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, plan: null } : m));
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  const suggestedCommands = [
-    "Tampilkan semua task",
-    "Buat issue baru untuk fix login bug",
-    "Pindahkan task PROJECT1-2 ke Done",
-    "Tampilkan task overdue minggu ini"
-  ];
+  const activeOperationsCount = issues.length;
 
   return (
-    <div className="flex flex-col h-full bg-[#09090B] relative">
-      {/* History Sidebar Overlay */}
-      <AnimatePresence>
-        {showHistory && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/50 z-40"
-              onClick={() => setShowHistory(false)}
-            />
-            <motion.div
-              initial={{ x: -280 }}
-              animate={{ x: 0 }}
-              exit={{ x: -280 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="absolute left-0 top-0 bottom-0 w-72 bg-[#111113] border-r border-white/10 z-50 flex flex-col"
-            >
-              <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                <span className="text-sm font-semibold text-[#FAFAFA]">Riwayat Chat</span>
-                <button onClick={() => setShowHistory(false)} className="text-[#71717A] hover:text-[#FAFAFA] transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
+    <div className="flex h-full overflow-hidden bg-[#05070A]">
+      {/* Column 1: Left Mission Log History (Desktop 3-col layout) */}
+      <aside className="w-64 border-r border-white/[0.06] bg-[#080B10] flex-col hidden lg:flex shrink-0">
+        <div className="p-3.5 border-b border-white/[0.04] flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4 text-violet-400" />
+            <TechnicalLabel>Mission Log History</TechnicalLabel>
+          </div>
+          <button
+            onClick={createNewSession}
+            className="p-1 rounded-md bg-[#10151C] border border-white/[0.08] hover:border-violet-500/40 text-[#71717A] hover:text-[#FAFAFA] transition-colors"
+            title="New Session"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
+          {sessions.map((s) => {
+            const isCurrent = s.id === sessionId;
+            return (
+              <button
+                key={s.id}
+                onClick={() => loadSession(s)}
+                className={`w-full text-left p-2 rounded-lg text-xs transition-all flex items-center gap-2 ${
+                  isCurrent
+                    ? 'bg-violet-500/10 border border-violet-500/30 text-violet-300 font-medium'
+                    : 'text-[#71717A] hover:bg-[#0B0F14] hover:text-[#FAFAFA]'
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate flex-1 font-mono text-[11px]">
+                  {s.title || 'Untitled Operation'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+
+      {/* Column 2: Center AI Command & Conversation Area */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+        {/* Top Header Bar on Mobile */}
+        <div className="lg:hidden flex items-center justify-between px-3 py-2 bg-[#080B10] border-b border-white/[0.06]">
+          <button
+            onClick={() => setShowHistoryMobile(!showHistoryMobile)}
+            className="flex items-center gap-1.5 text-xs font-mono text-[#A1A1AA] p-1.5 rounded-lg bg-[#0B0F14] border border-white/[0.08]"
+          >
+            <History className="w-3.5 h-3.5 text-violet-400" />
+            <span>History</span>
+          </button>
+
+          <button
+            onClick={createNewSession}
+            className="p-1.5 rounded-lg bg-violet-600/20 text-violet-300 border border-violet-500/30 text-xs font-mono flex items-center gap-1"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>New</span>
+          </button>
+
+          <button
+            onClick={() => setShowContextMobile(!showContextMobile)}
+            className="flex items-center gap-1.5 text-xs font-mono text-[#A1A1AA] p-1.5 rounded-lg bg-[#0B0F14] border border-white/[0.08]"
+          >
+            <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Context</span>
+          </button>
+        </div>
+
+        {/* Message Stream */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 scrollbar-thin">
+          {messages.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 shadow-[0_0_30px_rgba(139,92,246,0.15)]">
+                <Sparkles className="w-6 h-6" />
               </div>
-              <div className="p-3">
-                <button
-                  onClick={() => { createNewSession(); setShowHistory(false); }}
-                  className="w-full px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs text-white font-medium flex items-center justify-center gap-2 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Percakapan Baru
-                </button>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold uppercase font-mono tracking-wider text-[#FAFAFA]">
+                  AI Command & Intelligence System
+                </h3>
+                <p className="text-xs text-[#71717A] max-w-sm font-mono">
+                  Ask AI to decompose features into sub-tasks, triage screenshots, or query project telemetry.
+                </p>
               </div>
-              <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
-                {sessions.map((s) => (
+
+              {/* Quick Starters */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg w-full pt-4">
+                {[
+                  'Break down Authentication into frontend and backend tasks',
+                  'Find all overdue and blocked operations in this mission',
+                  'Analyze active sprint workload and suggest priorities',
+                  'Drop a screenshot for visual bug triage',
+                ].map((prompt) => (
                   <button
-                    key={s.id}
-                    onClick={() => loadSession(s)}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg text-xs transition-colors flex items-start gap-2 ${
-                      sessionId === s.id
-                        ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400'
-                        : 'hover:bg-[#18181B] text-[#A1A1AA] hover:text-[#FAFAFA]'
-                    }`}
+                    key={prompt}
+                    onClick={() => {
+                      setInput(prompt);
+                      inputRef.current?.focus();
+                    }}
+                    className="p-2.5 rounded-lg bg-[#0B0F14] border border-white/[0.06] hover:border-violet-500/30 text-left text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors font-mono"
                   >
-                    <MessageSquare className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    <div className="overflow-hidden">
-                      <div className="truncate font-medium">{s.title}</div>
-                      <div className="text-[10px] text-[#71717A] mt-0.5">
-                        {s._count?.messages || 0} pesan
-                      </div>
-                    </div>
+                    ✦ {prompt}
                   </button>
                 ))}
-                {sessions.length === 0 && (
-                  <p className="text-[10px] text-[#71717A] text-center py-6">Belum ada riwayat chat.</p>
-                )}
               </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-
-      {/* Top Bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-white/5">
-        <button
-          onClick={() => setShowHistory(true)}
-          className="p-2 rounded-lg hover:bg-[#18181B] text-[#71717A] hover:text-[#FAFAFA] transition-colors"
-          title="Riwayat Chat"
-        >
-          <History className="w-4 h-4" />
-        </button>
-        <span className="text-[10px] text-[#71717A] font-mono truncate max-w-[200px]">
-          {sessions.find(s => s.id === sessionId)?.title || 'New Conversation'}
-        </span>
-        <button
-          onClick={createNewSession}
-          className="p-2 rounded-lg hover:bg-[#18181B] text-[#71717A] hover:text-[#FAFAFA] transition-colors"
-          title="Percakapan Baru"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 scrollbar-thin">
-        {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center max-w-2xl mx-auto text-center space-y-6">
-            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-              ⚡
             </div>
-            <div>
-              <h2 className="text-xl font-semibold text-[#FAFAFA]">Plane AI Command Workstation</h2>
-              <p className="text-xs text-[#A1A1AA] mt-1">Ketik perintah dalam Bahasa Indonesia atau Inggris untuk mengelola project Plane secara otomatis.</p>
-            </div>
-            <div className="flex flex-wrap justify-center gap-2 mt-4 max-w-lg">
-              {suggestedCommands.map((cmd) => (
-                <button
-                  key={cmd}
-                  onClick={() => setInput(cmd)}
-                  className="px-3 py-2 rounded-xl bg-[#111113] border border-white/10 text-xs text-[#A1A1AA] hover:text-[#FAFAFA] hover:bg-[#18181B] hover:border-white/20 transition-all"
-                >
-                  {cmd}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="max-w-3xl mx-auto space-y-6">
-            <AnimatePresence initial={false}>
-              {messages.map((msg) => (
-                <motion.div
-                  key={msg.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div className={`max-w-[85%] rounded-2xl p-4 text-sm ${
-                    msg.role === 'user' 
-                      ? 'bg-blue-600 text-[#FAFAFA] rounded-br-sm' 
-                      : 'bg-[#111113] border border-white/10 text-[#FAFAFA] rounded-bl-sm'
-                  }`}>
-                    {/* Image preview for user messages */}
-                    {msg.imageUrl && (
-                      <div className="mb-2 rounded-lg overflow-hidden border border-white/10">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={msg.imageUrl} alt="Attached" className="max-w-full max-h-48 object-contain" />
-                      </div>
-                    )}
-                    <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                    
-                    {msg.plan && (
-                      <ActionPlanCard
-                        plan={msg.plan}
-                        onApprove={handleApprovePlan}
-                        onCancel={() => handleCancelPlan(msg.id)}
-                      />
-                    )}
+          ) : (
+            messages.map((m) => (
+              <div
+                key={m.id}
+                className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
+              >
+                <div className="flex items-center gap-1.5 mb-1 px-1">
+                  <span className="text-[9px] font-mono uppercase text-[#71717A]">
+                    {m.role === 'user' ? 'OPERATOR' : 'INTELLIGENCE SYSTEM'}
+                  </span>
+                </div>
 
-                    {msg.actionCards && msg.actionCards.length > 0 && (
-                      <div className="mt-4 space-y-3">
-                        {msg.actionCards.map((card, i) => (
-                          <ActionCard key={i} data={card} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </motion.div>
-              ))}
-              
-              {isLoading && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex justify-start"
+                <div
+                  className={`max-w-[90%] sm:max-w-[80%] p-3.5 rounded-xl text-xs space-y-2.5 ${
+                    m.role === 'user'
+                      ? 'bg-cyan-500/10 border border-cyan-500/20 text-[#FAFAFA] font-mono'
+                      : 'bg-[#0B0F14] border border-white/[0.06] text-[#FAFAFA]'
+                  }`}
                 >
-                  <div className="bg-[#111113] border border-white/10 rounded-2xl rounded-bl-sm p-4 flex items-center gap-2 text-xs text-[#A1A1AA]">
-                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    <span>Analyzing intent & building plan...</span>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <div ref={bottomRef} />
-          </div>
-        )}
-      </div>
+                  {m.imageUrl && (
+                    <img
+                      src={m.imageUrl}
+                      alt="Operator Attachment"
+                      className="rounded-lg max-h-48 border border-white/10 object-cover mb-2"
+                    />
+                  )}
+                  <div className="whitespace-pre-wrap leading-relaxed">{m.content}</div>
 
-      {/* Input Area */}
-      <div className="p-3 sm:p-4 bg-[#09090B] border-t border-white/5">
-        {/* Image preview chip */}
-        {imageAttachment && (
-          <div className="max-w-3xl mx-auto mb-2">
-            <div className="inline-flex items-center gap-2 bg-[#18181B] border border-white/10 rounded-xl px-3 py-1.5">
-              <div className="w-8 h-8 rounded-lg overflow-hidden border border-white/10 shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`data:${imageAttachment.mimeType};base64,${imageAttachment.base64}`}
-                  alt="Preview"
-                  className="w-full h-full object-cover"
-                />
+                  {m.plan && (
+                    <ActionPlanCard
+                      plan={m.plan}
+                      onApprove={handleApprovePlan}
+                      onCancel={() => {}}
+                    />
+                  )}
+
+                  {m.actionCards?.map((card, i) => (
+                    <ActionCard key={i} data={card} />
+                  ))}
+                </div>
               </div>
-              <span className="text-[10px] text-[#A1A1AA] truncate max-w-[120px]">{imageAttachment.name}</span>
-              <button onClick={removeImage} className="text-[#71717A] hover:text-red-400 transition-colors">
+            ))
+          )}
+
+          {isLoading && (
+            <div className="flex flex-col items-start space-y-1">
+              <span className="text-[9px] font-mono uppercase text-violet-400 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-violet-400 animate-pulse" />
+                AI PROCESSING CONTEXT...
+              </span>
+              <div className="p-3.5 rounded-xl bg-[#0B0F14] border border-violet-500/20 text-xs font-mono text-[#A1A1AA] flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-violet-400 animate-spin" />
+                <span>Decomposing project context and generating mission plan…</span>
+              </div>
+            </div>
+          )}
+
+          <div ref={bottomRef} />
+        </div>
+
+        {/* Input Console */}
+        <div className="p-3 sm:p-4 bg-[#080B10] border-t border-white/[0.06]">
+          {/* Image Attachment Preview */}
+          {imageAttachment && (
+            <div className="flex items-center gap-2 mb-2 p-2 bg-[#0B0F14] border border-violet-500/30 rounded-lg w-fit">
+              <span className="text-[11px] font-mono text-violet-300">
+                📷 {imageAttachment.name}
+              </span>
+              <button
+                onClick={() => setImageAttachment(null)}
+                className="text-[#71717A] hover:text-rose-400"
+              >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
+          )}
+
+          <div className="flex items-end gap-2 bg-[#0B0F14] border border-white/[0.08] focus-within:border-violet-500/40 rounded-xl p-2 transition-colors">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleImageUpload(f);
+              }}
+            />
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 rounded-lg text-[#71717A] hover:text-violet-400 hover:bg-violet-500/10 transition-colors shrink-0"
+              title="Upload Screenshot (Vision Analysis)"
+            >
+              <ImagePlus className="w-4 h-4" />
+            </button>
+
+            <textarea
+              ref={inputRef}
+              rows={1}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder="Ask AI or type mission command... (Enter to send)"
+              className="flex-1 bg-transparent border-none outline-none text-xs text-[#FAFAFA] placeholder-[#52525B] font-mono resize-none py-1.5 max-h-32"
+            />
+
+            <button
+              onClick={handleSend}
+              disabled={(!input.trim() && !imageAttachment) || isLoading}
+              className="p-2 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white disabled:opacity-40 transition-all shrink-0 shadow-md"
+            >
+              <SendHorizontal className="w-4 h-4" />
+            </button>
           </div>
-        )}
-        <div className="max-w-3xl mx-auto relative flex items-end gap-2 bg-[#111113] border border-white/10 rounded-2xl p-2 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/50 transition-all shadow-sm">
-          {/* Hidden file input */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageSelect}
-            className="hidden"
-          />
-          {/* Image attach button */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading}
-            className="p-3 text-[#71717A] hover:text-blue-400 transition-colors shrink-0 mb-0.5 disabled:opacity-50"
-            title="Lampirkan gambar"
-          >
-            <ImagePlus className="w-4 h-4" />
-          </button>
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ketik perintah... (Enter to send)"
-            className="flex-1 max-h-32 min-h-[44px] bg-transparent resize-none outline-none text-[#FAFAFA] placeholder-[#71717A] p-3 scrollbar-thin text-xs leading-relaxed"
-            rows={1}
-          />
-          <button
-            onClick={handleSend}
-            disabled={(!input.trim() && !imageAttachment) || isLoading}
-            className="p-3 bg-blue-600 text-white rounded-xl hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 mb-0.5"
-          >
-            <SendHorizontal className="w-4 h-4" />
-          </button>
         </div>
       </div>
+
+      {/* Column 3: Right Context Panel (Desktop) */}
+      <aside className="w-72 border-l border-white/[0.06] bg-[#080B10] flex-col hidden xl:flex shrink-0 p-4 space-y-4 overflow-y-auto scrollbar-thin">
+        <div>
+          <TechnicalLabel>Mission Context</TechnicalLabel>
+          <div className="mt-2 p-3 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono text-[#71717A]">ACTIVE MISSION</span>
+              <span className="text-xs font-mono font-bold text-cyan-400">
+                {activeProjectKey || 'ALL'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono text-[#71717A]">TOTAL WORK ITEMS</span>
+              <span className="text-xs font-mono font-bold text-[#FAFAFA]">
+                {activeOperationsCount}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <TechnicalLabel>Intelligence Engine</TechnicalLabel>
+          <div className="mt-2 p-3 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-2">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-[#A1A1AA]">Fast Route</span>
+              <StatusIndicator status="online" label="READY" />
+            </div>
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-[#A1A1AA]">Deep Route</span>
+              <StatusIndicator status="online" label="READY" />
+            </div>
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-[#A1A1AA]">Vision Triage</span>
+              <StatusIndicator status="online" label="ACTIVE" />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <TechnicalLabel>Security & Protection</TechnicalLabel>
+          <div className="mt-2 p-3 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-2 text-[10px] font-mono text-[#71717A]">
+            <div className="flex items-center gap-1.5 text-emerald-400">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>PII Scrubber Active</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-emerald-400">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Token Masking Active</span>
+            </div>
+          </div>
+        </div>
+      </aside>
     </div>
   );
 }

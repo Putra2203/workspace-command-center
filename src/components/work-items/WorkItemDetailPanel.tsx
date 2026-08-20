@@ -326,10 +326,10 @@ export function WorkItemDetailPanel({
               },
             }
           : {})}
-        className="relative w-full h-[88vh] md:h-full md:max-w-xl lg:max-w-2xl bg-[#0B0B0D] border-t border-x md:border-t-0 md:border-x-0 md:border-l border-white/10 rounded-t-2xl md:rounded-none shadow-2xl flex flex-col overflow-hidden z-50"
+        className="relative w-full h-[88vh] md:h-full md:max-w-xl lg:max-w-2xl bg-[#0B0F14] border-t border-x md:border-t-0 md:border-x-0 md:border-l border-white/[0.08] rounded-t-2xl md:rounded-none shadow-2xl flex flex-col overflow-hidden z-50"
       >
         {/* Sticky Header */}
-        <div className="px-5 pt-3 pb-3 border-b border-white/10 bg-[#0B0B0D] shrink-0 space-y-2">
+        <div className="px-5 pt-3 pb-3 border-b border-white/[0.06] bg-[#0B0F14] shrink-0 space-y-2">
           {/* Mobile Drag Handle Indicator */}
           {!isDesktop && (
             <div
@@ -341,13 +341,13 @@ export function WorkItemDetailPanel({
 
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-[11px] font-mono text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 shrink-0">
+              <span className="text-[11px] font-mono text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20 shrink-0">
                 {issueKey}
               </span>
               {parentIssue && (
                 <button
                   onClick={() => onOpenIssue(parentIssue.id)}
-                  className="flex items-center gap-1 text-[11px] text-[#71717A] hover:text-blue-400 transition-colors truncate"
+                  className="flex items-center gap-1 text-[11px] text-[#71717A] hover:text-cyan-400 transition-colors truncate font-mono"
                 >
                   <CornerUpLeft className="w-3 h-3 shrink-0" />
                   <span className="truncate">Parent: {projectKey}-{parentIssue.sequence_id} — {titleOf(parentIssue)}</span>
@@ -356,7 +356,7 @@ export function WorkItemDetailPanel({
             </div>
             <button
               onClick={onClose}
-              className="w-7 h-7 rounded-lg border border-white/10 flex items-center justify-center text-[#71717A] hover:text-[#FAFAFA] hover:border-white/20 transition-colors shrink-0"
+              className="w-7 h-7 rounded-lg border border-white/[0.08] flex items-center justify-center text-[#71717A] hover:text-[#FAFAFA] hover:border-white/20 transition-colors shrink-0"
               aria-label="Close"
             >
               <X className="w-4 h-4" />

@@ -20,6 +20,14 @@ interface IssueCardProps {
   onToggleSelect?: (id: string) => void;
 }
 
+const PRIORITY_BADGES: Record<string, { label: string; class: string }> = {
+  urgent: { label: 'P0', class: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
+  high: { label: 'P1', class: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
+  medium: { label: 'P2', class: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  low: { label: 'P3', class: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
+  none: { label: 'P4', class: 'text-[#71717A] bg-zinc-800/40 border-white/[0.06]' },
+};
+
 export function IssueCard({ issue, onSelect, selected = false, onToggleSelect }: IssueCardProps) {
   const {
     attributes,
@@ -36,20 +44,21 @@ export function IssueCard({ issue, onSelect, selected = false, onToggleSelect }:
     zIndex: isDragging ? 100 : undefined,
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case 'high': return 'bg-red-500';
-      case 'medium': return 'bg-yellow-500';
-      case 'low': return 'bg-green-500';
-      default: return 'bg-[#71717A]';
-    }
-  };
+  const isUUID = (str?: string) => (str ? /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(str) : false);
 
-  const isUUID = (str?: string) => str ? /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(str) : false;
+  const assigneeInitials =
+    issue.assignee && !isUUID(issue.assignee)
+      ? issue.assignee
+          .split(' ')
+          .map((n) => n[0])
+          .filter(Boolean)
+          .join('')
+          .substring(0, 2)
+          .toUpperCase()
+      : '?';
 
-  const assigneeInitials = issue.assignee && !isUUID(issue.assignee)
-    ? issue.assignee.split(' ').map(n => n[0]).filter(Boolean).join('').substring(0, 2).toUpperCase()
-    : '?';
+  const priority = (issue.priority || 'none').toLowerCase();
+  const badge = PRIORITY_BADGES[priority] || PRIORITY_BADGES.none;
 
   return (
     <div
@@ -58,9 +67,11 @@ export function IssueCard({ issue, onSelect, selected = false, onToggleSelect }:
       {...attributes}
       {...listeners}
       onClick={() => onSelect?.(issue.id)}
-      className={`relative p-3 bg-[#111113] border rounded-lg cursor-grab active:cursor-grabbing hover:bg-[#18181B] transition-colors shadow-sm group ${
-        selected ? 'border-blue-500/50 ring-1 ring-blue-500/30' : 'border-white/5 hover:border-white/10'
-      } ${isDragging ? 'opacity-50 ring-2 ring-blue-500' : ''}`}
+      className={`relative p-3 bg-[#0B0F14] border rounded-lg cursor-grab active:cursor-grabbing hover:bg-[#10151C] transition-all shadow-sm group ${
+        selected
+          ? 'border-cyan-400 ring-1 ring-cyan-400/30'
+          : 'border-white/[0.06] hover:border-cyan-400/30'
+      } ${isDragging ? 'opacity-70 scale-[1.02] border-cyan-400 shadow-[0_0_20px_rgba(56,189,248,0.2)]' : ''}`}
     >
       {onToggleSelect && (
         <button
@@ -71,19 +82,39 @@ export function IssueCard({ issue, onSelect, selected = false, onToggleSelect }:
           }}
           className={`absolute top-2 right-2 w-4 h-4 rounded border flex items-center justify-center transition-colors ${
             selected
-              ? 'bg-blue-600 border-blue-600'
-              : 'border-white/20 bg-[#09090B]/60 opacity-0 group-hover:opacity-100'
+              ? 'bg-cyan-500 border-cyan-500 text-[#05070A]'
+              : 'border-white/20 bg-[#05070A]/80 opacity-0 group-hover:opacity-100'
           }`}
           aria-label={selected ? 'Deselect issue' : 'Select issue'}
         >
-          {selected && <span className="w-1.5 h-1.5 rounded-sm bg-white" />}
+          {selected && <span className="w-1.5 h-1.5 rounded-xs bg-[#05070A]" />}
         </button>
       )}
-      <div className="text-[10px] font-medium text-[#71717A] mb-1">{issue.key}</div>
-      <div className="text-sm text-[#FAFAFA] line-clamp-2 leading-snug mb-3">{issue.title}</div>
-      <div className="flex items-center justify-between mt-auto">
-        <div className={`w-2 h-2 rounded-full ${getPriorityColor(issue.priority)}`} title={`Priority: ${issue.priority}`} />
-        <div className="w-5 h-5 rounded-full bg-[#27272A] border border-[#3F3F46] flex items-center justify-center text-[9px] font-medium text-[#FAFAFA]" title={issue.assignee || 'Unassigned'}>
+
+      {/* Card Header: Monospace Key & Priority Code */}
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-mono font-medium text-cyan-400 tracking-tight">
+          {issue.key}
+        </span>
+        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border ${badge.class}`}>
+          {badge.label}
+        </span>
+      </div>
+
+      {/* Task Title */}
+      <div className="text-xs font-medium text-[#FAFAFA] line-clamp-2 leading-snug mb-3 group-hover:text-cyan-300 transition-colors">
+        {issue.title}
+      </div>
+
+      {/* Card Footer: Assignee */}
+      <div className="flex items-center justify-between pt-2 border-t border-white/[0.04] mt-auto">
+        <span className="text-[9px] font-mono text-[#52525B] uppercase tracking-wider">
+          {issue.assignee && !isUUID(issue.assignee) ? issue.assignee.split(' ')[0] : 'UNASSIGNED'}
+        </span>
+        <div
+          className="w-5 h-5 rounded bg-[#151B23] border border-white/[0.08] flex items-center justify-center text-[9px] font-mono font-bold text-[#FAFAFA]"
+          title={issue.assignee || 'Unassigned'}
+        >
           {assigneeInitials}
         </div>
       </div>

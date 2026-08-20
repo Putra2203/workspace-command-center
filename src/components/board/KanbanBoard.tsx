@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { 
   DndContext, 
   DragOverlay, 
@@ -60,15 +60,19 @@ function Column({ state, issues, selectedIds, onToggleSelect, onSelectIssue }: C
   });
 
   return (
-    <div className="flex flex-col w-[85vw] sm:w-72 shrink-0 snap-center h-full max-h-full overflow-hidden bg-[#09090B] border-r border-white/5 last:border-r-0">
-      <div className="p-3 border-b border-white/5 flex items-center gap-2 sticky top-0 bg-[#09090B] z-10">
-        <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: state.color }} />
-        <span className="font-medium text-sm text-[#FAFAFA]">{state.name}</span>
-        <span className="ml-auto text-xs bg-[#111113] border border-white/10 px-2 py-0.5 rounded-full text-[#A1A1AA]">
+    <div className="flex flex-col w-[85vw] sm:w-72 shrink-0 snap-center h-full max-h-full overflow-hidden bg-[#05070A] border-r border-white/[0.06] last:border-r-0">
+      {/* Column Header */}
+      <div className="p-3 border-b border-white/[0.06] flex items-center gap-2 sticky top-0 bg-[#080B10] z-10">
+        <div className="w-2 h-2 rounded-xs" style={{ backgroundColor: state.color }} />
+        <span className="font-mono text-xs font-semibold text-[#FAFAFA] uppercase tracking-wider">
+          {state.name}
+        </span>
+        <span className="ml-auto text-[10px] font-mono font-bold bg-[#10151C] border border-white/[0.08] px-2 py-0.5 rounded-full text-cyan-400">
           {issues.length}
         </span>
       </div>
 
+      {/* Column Droppable Area */}
       <div ref={setNodeRef} className="flex-1 overflow-y-auto p-2 scrollbar-thin space-y-2">
         <SortableContext items={issues.map(i => i.id)} strategy={verticalListSortingStrategy}>
           {issues.length > 0 ? (
@@ -82,8 +86,8 @@ function Column({ state, issues, selectedIds, onToggleSelect, onSelectIssue }: C
               />
             ))
           ) : (
-            <div className="h-24 rounded-lg border-2 border-dashed border-white/5 flex items-center justify-center text-xs text-[#71717A]">
-              Drop issues here
+            <div className="h-24 rounded-lg border border-dashed border-white/[0.08] flex items-center justify-center text-[11px] font-mono text-[#52525B] bg-[#0B0F14]/40">
+              DROP OPERATIONS HERE
             </div>
           )}
         </SortableContext>
@@ -96,6 +100,11 @@ const BULK_PRIORITIES = ['urgent', 'high', 'medium', 'low', 'none'] as const;
 
 export function KanbanBoard({ states, issues: initialIssues, onMoveIssue, onBulkUpdatePriority, onSelectIssue }: KanbanBoardProps) {
   const [issues, setIssues] = useState<Issue[]>(initialIssues);
+
+  useEffect(() => {
+    setIssues(initialIssues);
+  }, [initialIssues]);
+
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [pendingPlan, setPendingPlan] = useState<ActionPlan | null>(null);
@@ -188,7 +197,7 @@ export function KanbanBoard({ states, issues: initialIssues, onMoveIssue, onBulk
       setIssues(tasks => {
         const activeIndex = tasks.findIndex(t => t.id === activeId);
         tasks[activeIndex].stateId = overId as string;
-        return arrayMove(tasks, activeIndex, activeIndex); // trigger re-render
+        return arrayMove(tasks, activeIndex, activeIndex);
       });
     }
   };
@@ -205,7 +214,7 @@ export function KanbanBoard({ states, issues: initialIssues, onMoveIssue, onBulk
   };
 
   return (
-    <div className="relative flex h-full w-full overflow-x-auto bg-[#09090B] scrollbar-thin snap-x snap-mandatory pb-16 md:pb-0">
+    <div className="relative flex h-full w-full overflow-x-auto bg-[#05070A] scrollbar-thin snap-x snap-mandatory pb-16 md:pb-0">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -224,18 +233,21 @@ export function KanbanBoard({ states, issues: initialIssues, onMoveIssue, onBulk
         </DragOverlay>
       </DndContext>
 
+      {/* Floating Bulk Operations Toolbar */}
       {selectedIds.size > 0 && (
-        <div className="absolute bottom-20 sm:bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#111113] border border-white/10 shadow-2xl max-w-[95vw] overflow-x-auto">
-          <span className="text-xs text-[#A1A1AA] font-medium">{selectedIds.size} selected</span>
+        <div className="absolute bottom-20 sm:bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-[#0B0F14]/95 border border-cyan-500/30 shadow-[0_0_30px_rgba(56,189,248,0.15)] max-w-[95vw] overflow-x-auto z-40 backdrop-blur-md">
+          <span className="text-xs font-mono font-semibold text-cyan-300 whitespace-nowrap">
+            {selectedIds.size} selected
+          </span>
           <div className="w-px h-4 bg-white/10" />
-          <span className="text-xs text-[#71717A] flex items-center gap-1">
-            <Flag className="w-3 h-3" /> Set priority:
+          <span className="text-[11px] font-mono text-[#71717A] flex items-center gap-1">
+            <Flag className="w-3 h-3 text-cyan-400" /> Set:
           </span>
           {BULK_PRIORITIES.map(p => (
             <button
               key={p}
               onClick={() => requestBulkPriority(p)}
-              className="px-2.5 py-1 rounded-md text-[11px] font-medium capitalize bg-[#18181B] border border-white/10 text-[#A1A1AA] hover:text-[#FAFAFA] hover:border-white/20 transition-colors"
+              className="px-2.5 py-1 rounded-md text-[10px] font-mono font-bold uppercase bg-[#10151C] border border-white/[0.08] text-[#A1A1AA] hover:text-cyan-300 hover:border-cyan-400/40 transition-colors"
             >
               {p}
             </button>
@@ -243,7 +255,7 @@ export function KanbanBoard({ states, issues: initialIssues, onMoveIssue, onBulk
           <div className="w-px h-4 bg-white/10" />
           <button
             onClick={() => setSelectedIds(new Set())}
-            className="text-[11px] text-[#71717A] hover:text-[#FAFAFA] transition-colors"
+            className="text-[11px] font-mono text-[#71717A] hover:text-[#FAFAFA] transition-colors"
           >
             Clear
           </button>
