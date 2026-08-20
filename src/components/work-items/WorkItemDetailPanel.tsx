@@ -275,20 +275,25 @@ export function WorkItemDetailPanel({
     }
   };
 
-  const [isDesktop, setIsDesktop] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 768;
+    }
+    return false;
+  });
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(min-width: 768px)');
-    setIsDesktop(mediaQuery.matches);
-
-    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
-    mediaQuery.addEventListener('change', handler);
-    return () => mediaQuery.removeEventListener('change', handler);
+    const handleResize = () => {
+      setIsDesktop(window.innerWidth >= 768);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex ${isDesktop ? 'justify-end' : 'flex-col justify-end'}`}
+      className="fixed inset-0 z-50 flex flex-col justify-end md:flex-row md:justify-end"
       role="dialog"
       aria-modal="true"
     >
@@ -298,33 +303,30 @@ export function WorkItemDetailPanel({
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }}
-        className="absolute inset-0 bg-black/70 backdrop-blur-xs"
+        className="fixed inset-0 bg-black/70 backdrop-blur-xs z-40"
         onClick={onClose}
       />
 
-      {/* Responsive Panel: Side Drawer on Desktop, Bottom Sheet on Mobile */}
+      {/* Responsive Panel: Full-height Side Drawer on Desktop, Bottom Sheet on Mobile */}
       <motion.div
-        initial={isDesktop ? { x: '100%', opacity: 0.6 } : { y: '100%', opacity: 0.5 }}
+        key={isDesktop ? 'desktop-side-drawer' : 'mobile-bottom-sheet'}
+        initial={isDesktop ? { x: '100%', opacity: 0 } : { y: '100%', opacity: 0 }}
         animate={isDesktop ? { x: 0, opacity: 1 } : { y: 0, opacity: 1 }}
         exit={isDesktop ? { x: '100%', opacity: 0 } : { y: '100%', opacity: 0 }}
-        transition={
-          isDesktop
-            ? { type: 'spring', damping: 30, stiffness: 320 }
-            : { type: 'spring', damping: 28, stiffness: 300 }
-        }
-        drag={isDesktop ? false : 'y'}
-        dragConstraints={{ top: 0, bottom: 0 }}
-        dragElastic={{ top: 0, bottom: 0.5 }}
-        onDragEnd={(_, info) => {
-          if (!isDesktop && (info.offset.y > 100 || info.velocity.y > 400)) {
-            onClose();
-          }
-        }}
-        className={
-          isDesktop
-            ? 'relative w-full max-w-xl lg:max-w-2xl h-full bg-[#0B0B0D] border-l border-white/10 shadow-2xl flex flex-col overflow-hidden z-10'
-            : 'relative w-full max-w-4xl mx-auto h-[88vh] max-h-[88vh] bg-[#0B0B0D] border-t border-x border-white/10 rounded-t-2xl shadow-2xl flex flex-col overflow-hidden z-10'
-        }
+        transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+        {...(!isDesktop
+          ? {
+              drag: 'y',
+              dragConstraints: { top: 0, bottom: 0 },
+              dragElastic: { top: 0, bottom: 0.5 },
+              onDragEnd: (_, info) => {
+                if (info.offset.y > 100 || info.velocity.y > 400) {
+                  onClose();
+                }
+              },
+            }
+          : {})}
+        className="relative w-full h-[88vh] md:h-full md:max-w-xl lg:max-w-2xl bg-[#0B0B0D] border-t border-x md:border-t-0 md:border-x-0 md:border-l border-white/10 rounded-t-2xl md:rounded-none shadow-2xl flex flex-col overflow-hidden z-50"
       >
         {/* Sticky Header */}
         <div className="px-5 pt-3 pb-3 border-b border-white/10 bg-[#0B0B0D] shrink-0 space-y-2">
