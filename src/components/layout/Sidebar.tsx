@@ -24,6 +24,7 @@ import {
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import { motion, AnimatePresence } from 'motion/react';
 import { TechnicalDivider } from '@/components/ui/TechnicalDivider';
+import { LogoutOverlay } from '@/components/ui/LogoutOverlay';
 
 interface Project {
   id: string;
@@ -38,6 +39,7 @@ interface SidebarProps {
 export function Sidebar({ projects }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const {
     sidebarOpen,
     setSidebarOpen,
@@ -320,24 +322,34 @@ export function Sidebar({ projects }: SidebarProps) {
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={async () => {
-              await fetch('/api/auth/logout', { method: 'POST' });
-              router.push('/login');
-              router.refresh();
+              setIsLoggingOut(true);
+              try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+              } catch (err) {
+                console.error('Logout failed:', err);
+              }
+              setTimeout(() => {
+                router.push('/login');
+                router.refresh();
+              }, 1000);
             }}
             title="Keluar / Logout"
-            className="p-1.5 rounded-lg text-[#71717A] hover:bg-rose-500/10 hover:text-rose-400 transition-colors"
+            className="p-1.5 rounded-lg text-[#71717A] hover:bg-rose-500/10 hover:text-rose-400 transition-colors cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
           </button>
 
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1.5 rounded-lg text-[#71717A] hover:bg-[#10151C] hover:text-[#FAFAFA] transition-colors"
+            className="p-1.5 rounded-lg text-[#71717A] hover:bg-[#10151C] hover:text-[#FAFAFA] transition-colors cursor-pointer"
           >
             {sidebarOpen ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
           </button>
         </div>
       </div>
+
+      {/* Fullscreen Animated Logout Sequence */}
+      <LogoutOverlay isVisible={isLoggingOut} />
     </motion.aside>
   );
 }

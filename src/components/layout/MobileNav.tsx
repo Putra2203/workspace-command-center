@@ -20,18 +20,20 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import { TechnicalDivider } from '@/components/ui/TechnicalDivider';
+import { LogoutOverlay } from '@/components/ui/LogoutOverlay';
 
 export function MobileNav() {
   const router = useRouter();
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { currentUser, toggleCommandPalette } = useWorkspaceStore();
 
   const navItems = [
-    { id: 'day', label: 'Mission', icon: Home, action: () => router.push('/day') },
+    { id: 'day', label: 'My Day', icon: Home, action: () => router.push('/day') },
     { id: 'board', label: 'Board', icon: LayoutGrid, action: () => router.push('/board') },
-    { id: 'command', label: 'AI Command', icon: Sparkles, action: () => router.push('/command'), isPrimary: true },
-    { id: 'issues', label: 'Items', icon: ListTodo, action: () => router.push('/issues') },
+    { id: 'command', label: 'AI Pilot', icon: TerminalSquare, action: () => router.push('/command'), isPrimary: true },
+    { id: 'issues', label: 'Issues', icon: ListTodo, action: () => router.push('/issues') },
     {
       id: 'more',
       label: 'More',
@@ -42,12 +44,17 @@ export function MobileNav() {
   ];
 
   const handleLogout = async () => {
+    setMoreOpen(false);
+    setIsLoggingOut(true);
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error('Logout error:', err);
     }
-    router.push('/login');
+    setTimeout(() => {
+      router.push('/login');
+      router.refresh();
+    }, 1000);
   };
 
   const handleNavigate = (path: string) => {
@@ -258,6 +265,9 @@ export function MobileNav() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Fullscreen Animated Logout Sequence */}
+      <LogoutOverlay isVisible={isLoggingOut} />
     </>
   );
 }
