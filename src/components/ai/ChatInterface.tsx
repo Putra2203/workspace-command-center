@@ -212,7 +212,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
         )}
       </div>
 
-      <div className="p-4 bg-[#09090B] border-t border-white/5">
+      <div className="p-4 pb-20 sm:pb-4 bg-[#09090B] border-t border-white/5">
         <div className="max-w-3xl mx-auto relative flex items-end gap-2 bg-[#111113] border border-white/10 rounded-2xl p-2 focus-within:border-blue-500/50 focus-within:ring-1 focus-within:ring-blue-500/50 transition-all shadow-sm">
           <textarea
             ref={inputRef}
