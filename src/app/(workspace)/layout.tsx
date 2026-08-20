@@ -3,9 +3,11 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { usePathname } from 'next/navigation';
 import { Loader2, RefreshCw, User, Users, ChevronDown, Check, FolderKanban } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { MobileNav } from '@/components/layout/MobileNav';
 import { CommandPalette } from '@/components/layout/CommandPalette';
+import { SplashScreen } from '@/components/ui/SplashScreen';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import { WorkspaceDataProvider, useWorkspaceData } from '@/lib/context/workspace-data';
 
@@ -23,8 +25,19 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const { activeProjectId, activeProjectKey, setActiveProject, userScope, setUserScope, currentUser, toggleCommandPalette } = useWorkspaceStore();
   const { projects, projectsLoading, issues, fetchingIssues, fetchProjectData, refetchProjects } = useWorkspaceData();
 
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Guarantee minimum splash time for smooth initial entrance
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMinTimeElapsed(true);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const showSplash = projectsLoading || fetchingIssues || !minTimeElapsed;
 
   const allProjects = useMemo(() => [
     { id: 'ALL', name: 'All Projects', identifier: 'ALL' },
@@ -41,19 +54,13 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  if (projectsLoading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-[#09090B]">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-          <p className="text-[#71717A] text-sm font-medium">Connecting to Plane Command Center...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="h-screen flex overflow-hidden">
+    <div className="h-screen flex overflow-hidden relative">
+      {/* Unified Framer Motion Splash & Loading Screen */}
+      <AnimatePresence mode="wait">
+        {showSplash && <SplashScreen key="unified-splash" />}
+      </AnimatePresence>
+
       {/* Sidebar - Desktop only */}
       <Sidebar projects={projects} />
 

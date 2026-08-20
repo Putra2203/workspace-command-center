@@ -16,7 +16,8 @@ import {
   Check,
   FolderKanban,
   User,
-  Users
+  Users,
+  LogOut
 } from 'lucide-react';
 import { useWorkspaceStore } from '@/stores/workspace-store';
 import { motion, AnimatePresence } from 'motion/react';
@@ -236,12 +237,26 @@ export function Sidebar({ projects }: SidebarProps) {
           )}
         </div>
 
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-1.5 rounded-lg text-[#A1A1AA] hover:bg-[#18181B] hover:text-[#FAFAFA] transition-colors shrink-0"
-        >
-          {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={async () => {
+              await fetch('/api/auth/logout', { method: 'POST' });
+              router.push('/login');
+              router.refresh();
+            }}
+            title="Keluar / Logout"
+            className="p-1.5 rounded-lg text-[#A1A1AA] hover:bg-red-500/10 hover:text-red-400 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-1.5 rounded-lg text-[#A1A1AA] hover:bg-[#18181B] hover:text-[#FAFAFA] transition-colors"
+          >
+            {sidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
     </motion.aside>
   );
