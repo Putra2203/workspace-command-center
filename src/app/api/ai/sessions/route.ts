@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     }
     const sessions = await (prisma as any).chatSession.findMany({
       orderBy: { updatedAt: 'desc' },
-      take: 20,
+      take: 50,
       include: {
         _count: { select: { messages: true } },
       },
@@ -105,5 +105,26 @@ export async function PUT(request: NextRequest) {
   } catch (error) {
     console.warn('Failed to persist chat message to DB:', error);
     return Response.json({ message: { id: `local-msg-${Date.now()}`, fallback: true } });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const sessionId = request.nextUrl.searchParams.get('sessionId');
+    if (!sessionId) {
+      return Response.json({ error: 'sessionId is required' }, { status: 400 });
+    }
+
+    // Skip DB delete for local fallback sessions
+    if (!sessionId.startsWith('local-') && prisma && (prisma as any).chatSession) {
+      await (prisma as any).chatSession.delete({
+        where: { id: sessionId },
+      });
+    }
+
+    return Response.json({ success: true, deletedId: sessionId });
+  } catch (error) {
+    console.warn('Failed to delete chat session from DB:', error);
+    return Response.json({ success: true, deletedId: 'local' });
   }
 }

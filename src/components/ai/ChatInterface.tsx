@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   SendHorizontal,
@@ -21,6 +21,8 @@ import {
   HelpCircle,
   FolderKanban,
   CheckCircle2,
+  Trash2,
+  Search,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ActionCard, ActionPlanCard } from './ActionCard';
@@ -80,6 +82,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [historySearch, setHistorySearch] = useState('');
   const [showHistoryMobile, setShowHistoryMobile] = useState(false);
   const [showContextMobile, setShowContextMobile] = useState(false);
   const [imageAttachment, setImageAttachment] = useState<{ base64: string; mimeType: string; name: string } | null>(null);
@@ -93,6 +96,14 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollFrameRef = useRef<number>(0);
+
+  // Auto-resize textarea vertically up to max-height (ChatGPT / Gemini behavior)
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 140)}px`;
+    }
+  }, [input]);
 
   const scrollToBottom = useCallback(() => {
     if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
@@ -177,6 +188,32 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
     }
   };
 
+  const handleDeleteSession = async (idToDelete: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    // Optimistic UI update
+    setSessions((prev) => prev.filter((s) => s.id !== idToDelete));
+
+    // If the active session is deleted, switch to a new clean session
+    if (sessionId === idToDelete) {
+      createNewSession();
+    }
+
+    try {
+      await fetch(`/api/ai/sessions?sessionId=${encodeURIComponent(idToDelete)}`, {
+        method: 'DELETE',
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  const filteredSessions = useMemo(() => {
+    if (!historySearch.trim()) return sessions;
+    const q = historySearch.trim().toLowerCase();
+    return sessions.filter((s) => s.title?.toLowerCase().includes(q));
+  }, [sessions, historySearch]);
+
   const handleImageUpload = (file: File) => {
     if (!file.type.startsWith('image/')) return;
     if (file.size > MAX_IMAGE_SIZE) return;
@@ -231,6 +268,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
 
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    if (inputRef.current) inputRef.current.style.height = 'auto';
     const currentAttachment = imageAttachment;
     setImageAttachment(null);
     setIsLoading(true);
@@ -342,7 +380,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
   const renderContentWithMentions = (content: string) => {
     const parts = content.split(/(\b[A-Z0-9]+-\d+\b)/g);
     return (
-      <div className="whitespace-pre-wrap leading-relaxed">
+      <div className="whitespace-pre-wrap leading-relaxed break-words">
         {parts.map((part, i) => {
           if (/^[A-Z0-9]+-\d+$/i.test(part)) {
             return (
@@ -366,7 +404,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
   const activeOperationsCount = issues.length;
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#05070A] max-w-full">
+    <div className="flex h-full w-full overflow-hidden bg-[#05070A] max-w-full min-w-0">
       {/* Slide-Over Issue Preview Drawer */}
       <IssuePreviewDrawer
         isOpen={isDrawerOpen}
@@ -386,41 +424,79 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
           <button
             type="button"
             onClick={createNewSession}
-            className="p-1 rounded-md bg-[#10151C] border border-white/[0.08] hover:border-violet-500/40 text-[#71717A] hover:text-[#FAFAFA] transition-colors"
+            className="p-1 rounded-md bg-[#10151C] border border-white/[0.08] hover:border-violet-500/40 text-[#71717A] hover:text-[#FAFAFA] transition-colors cursor-pointer"
             title="New Session"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
-          {sessions.map((s) => {
-            const isCurrent = s.id === sessionId;
-            return (
+        {/* Desktop History Search Bar */}
+        <div className="p-2 border-b border-white/[0.04]">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0B0F14] border border-white/[0.06] focus-within:border-violet-500/40 transition-colors">
+            <Search className="w-3 h-3 text-[#71717A] shrink-0" />
+            <input
+              type="text"
+              value={historySearch}
+              onChange={(e) => setHistorySearch(e.target.value)}
+              placeholder="Search history..."
+              className="w-full bg-transparent border-none outline-none text-[11px] font-mono text-[#FAFAFA] placeholder-[#52525B]"
+            />
+            {historySearch && (
               <button
-                key={s.id}
                 type="button"
-                onClick={() => loadSession(s)}
-                className={`w-full text-left p-2 rounded-lg text-xs transition-all flex items-center gap-2 ${
-                  isCurrent
-                    ? 'bg-violet-500/10 border border-violet-500/30 text-violet-300 font-medium'
-                    : 'text-[#71717A] hover:bg-[#0B0F14] hover:text-[#FAFAFA]'
-                }`}
+                onClick={() => setHistorySearch('')}
+                className="text-[#71717A] hover:text-[#FAFAFA] cursor-pointer"
               >
-                <MessageSquare className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate flex-1 font-mono text-[11px]">
-                  {s.title || 'Untitled Operation'}
-                </span>
+                <X className="w-3 h-3" />
               </button>
-            );
-          })}
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
+          {filteredSessions.length === 0 ? (
+            <div className="p-4 text-center text-xs font-mono text-[#71717A] italic">
+              {historySearch ? 'No matching sessions.' : 'No previous chat sessions.'}
+            </div>
+          ) : (
+            filteredSessions.map((s) => {
+              const isCurrent = s.id === sessionId;
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => loadSession(s)}
+                  className={`group relative w-full text-left p-2 rounded-lg text-xs transition-all flex items-center justify-between cursor-pointer ${
+                    isCurrent
+                      ? 'bg-violet-500/10 border border-violet-500/30 text-violet-300 font-medium'
+                      : 'text-[#71717A] hover:bg-[#0B0F14] hover:text-[#FAFAFA]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 overflow-hidden min-w-0 flex-1 pr-1">
+                    <MessageSquare className="w-3.5 h-3.5 shrink-0 text-violet-400/80" />
+                    <span className="truncate font-mono text-[11px]">
+                      {s.title || 'Untitled Operation'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteSession(s.id, e)}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-500/20 text-[#71717A] hover:text-rose-400 transition-all cursor-pointer shrink-0"
+                    title="Delete Session"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              );
+            })
+          )}
         </div>
       </aside>
 
       {/* Column 2: Center AI Command & Conversation Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative max-w-full">
+      <div className="flex-1 flex flex-col h-full w-full overflow-hidden relative max-w-full min-w-0">
         {/* Mobile Compact Sub-Header */}
-        <div className="lg:hidden flex items-center justify-between px-3 py-2 bg-[#080B10]/95 backdrop-blur border-b border-white/[0.06] shrink-0 z-20">
+        <div className="lg:hidden flex items-center justify-between px-3 py-2 bg-[#080B10]/95 backdrop-blur border-b border-white/[0.06] shrink-0 z-20 w-full min-w-0 overflow-x-hidden">
           <button
             type="button"
             onClick={() => {
@@ -453,9 +529,9 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
         </div>
 
         {/* Message Stream */}
-        <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 scrollbar-thin overscroll-contain">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 scrollbar-thin overscroll-contain w-full min-w-0 max-w-full">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-4 sm:p-6 space-y-3">
+            <div className="h-full flex flex-col items-center justify-center text-center p-4 sm:p-6 space-y-3 max-w-full">
               <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 shadow-[0_0_30px_rgba(56,189,248,0.15)]">
                 <Sparkles className="w-6 h-6" />
               </div>
@@ -463,7 +539,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                 <h3 className="text-sm font-bold uppercase font-mono tracking-wider text-[#FAFAFA]">
                   AI Command & Intelligence System
                 </h3>
-                <p className="text-xs text-[#71717A] max-w-sm font-mono leading-relaxed">
+                <p className="text-xs text-[#71717A] max-w-sm font-mono leading-relaxed mx-auto">
                   Autonomous copilot for Erdavid Work OS. List tasks, decompose epics, or triage issues.
                 </p>
               </div>
@@ -480,9 +556,9 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                     key={idx}
                     type="button"
                     onClick={() => handleSend(item.cmd)}
-                    className="p-3 rounded-xl bg-[#0B0F14] border border-white/[0.06] hover:border-cyan-500/30 text-left text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors font-mono min-h-[44px] flex items-center cursor-pointer"
+                    className="p-3 rounded-xl bg-[#0B0F14] border border-white/[0.06] hover:border-cyan-500/30 text-left text-xs text-[#A1A1AA] hover:text-[#FAFAFA] transition-colors font-mono min-h-[44px] flex items-center cursor-pointer min-w-0 truncate"
                   >
-                    {item.label}
+                    <span className="truncate">{item.label}</span>
                   </button>
                 ))}
               </div>
@@ -491,7 +567,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
             messages.map((m) => (
               <div
                 key={m.id}
-                className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
+                className={`flex flex-col max-w-full ${m.role === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div className="flex items-center gap-1.5 mb-1 px-1">
                   <span className="text-[9px] font-mono uppercase text-[#71717A]">
@@ -500,7 +576,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                 </div>
 
                 <div
-                  className={`max-w-[95%] sm:max-w-[80%] p-3 sm:p-3.5 rounded-2xl text-xs space-y-2.5 ${
+                  className={`max-w-[95%] sm:max-w-[80%] p-3 sm:p-3.5 rounded-2xl text-xs space-y-2.5 break-words ${
                     m.role === 'user'
                       ? 'bg-cyan-500/10 border border-cyan-500/20 text-[#FAFAFA] font-mono'
                       : 'bg-[#0B0F14] border border-white/[0.06] text-[#FAFAFA]'
@@ -553,10 +629,10 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input Console & Thumb Carousel (Refined & Compact) */}
-        <div className="p-2 sm:p-3 bg-[#080B10]/95 backdrop-blur border-t border-white/[0.06] shrink-0 space-y-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        {/* Input Console & Thumb Carousel (Sleek, Compact, ChatGPT-Style Auto-Wrap & Auto-Grow) */}
+        <div className="p-2 sm:p-3 bg-[#080B10]/95 backdrop-blur border-t border-white/[0.06] shrink-0 space-y-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] w-full min-w-0 max-w-full overflow-hidden">
           {/* Horizontal Thumb Carousel */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none no-scrollbar">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none no-scrollbar w-full min-w-0">
             {QUICK_CHIPS.map((chip, i) => (
               <button
                 key={i}
@@ -578,14 +654,14 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
 
           {/* Image Attachment Preview */}
           {imageAttachment && (
-            <div className="flex items-center gap-2 p-1.5 bg-[#0B0F14] border border-violet-500/30 rounded-lg w-fit">
-              <span className="text-[10px] font-mono text-violet-300">
+            <div className="flex items-center gap-2 p-1.5 bg-[#0B0F14] border border-violet-500/30 rounded-lg w-fit max-w-full min-w-0">
+              <span className="text-[10px] font-mono text-violet-300 truncate">
                 📷 {imageAttachment.name}
               </span>
               <button
                 type="button"
                 onClick={() => setImageAttachment(null)}
-                className="text-[#71717A] hover:text-rose-400 p-0.5 cursor-pointer"
+                className="text-[#71717A] hover:text-rose-400 p-0.5 cursor-pointer shrink-0"
                 aria-label="Remove image"
               >
                 <X className="w-3 h-3" />
@@ -593,8 +669,8 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
             </div>
           )}
 
-          {/* Textarea Input Bar (Sleek, Compact, Cyber-Terminal Proportional) */}
-          <div className="flex items-center gap-1.5 bg-[#0B0F14] border border-white/[0.08] focus-within:border-cyan-500/40 rounded-xl px-2 py-1 transition-colors">
+          {/* Textarea Input Bar (Contained, Auto-Wrap, Vertical Growth without Horizontal Expansion) */}
+          <div className="flex items-end gap-1.5 bg-[#0B0F14] border border-white/[0.08] focus-within:border-cyan-500/40 rounded-xl px-2 py-1.5 transition-colors w-full min-w-0 max-w-full overflow-hidden">
             <input
               type="file"
               ref={fileInputRef}
@@ -609,7 +685,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-1 rounded-lg text-[#71717A] hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors shrink-0 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center cursor-pointer"
+              className="p-1 rounded-lg text-[#71717A] hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors shrink-0 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center cursor-pointer mb-0.5"
               title="Upload Screenshot (Vision Analysis)"
               aria-label="Upload Screenshot"
             >
@@ -628,14 +704,14 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                 }
               }}
               placeholder="Ask AI or /today, /overdue, /plan..."
-              className="flex-1 bg-transparent border-none outline-none text-xs sm:text-xs text-[#FAFAFA] placeholder-[#52525B] font-mono resize-none py-1.5 px-1.5 max-h-28 leading-snug"
+              className="min-w-0 flex-1 w-full bg-transparent border-none outline-none text-xs sm:text-xs text-[#FAFAFA] placeholder-[#52525B] font-mono resize-none py-1 px-1.5 max-h-36 leading-5 break-words break-all overflow-y-auto scrollbar-thin"
             />
 
             <button
               type="button"
               onClick={() => handleSend()}
               disabled={(!input.trim() && !imageAttachment) || isLoading}
-              className="p-1 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white disabled:opacity-30 transition-all shrink-0 shadow-sm w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center active:scale-95 cursor-pointer"
+              className="p-1 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white disabled:opacity-30 transition-all shrink-0 shadow-sm w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center active:scale-95 cursor-pointer mb-0.5"
               aria-label="Send"
             >
               <SendHorizontal className="w-3.5 h-3.5" />
@@ -725,10 +801,10 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 280 }}
                 onClick={(e) => e.stopPropagation()}
-                className="relative z-10 w-full bg-[#080B10] border-t border-white/[0.12] rounded-t-3xl shadow-2xl p-5 space-y-4 max-h-[80vh] flex flex-col pb-[max(2rem,env(safe-area-inset-bottom))]"
+                className="relative z-10 w-full bg-[#080B10] border-t border-white/[0.12] rounded-t-3xl shadow-2xl p-5 space-y-3.5 max-h-[80vh] flex flex-col pb-[max(2rem,env(safe-area-inset-bottom))]"
               >
                 <div className="w-10 h-1 bg-white/20 rounded-full mx-auto -mt-2 mb-1 cursor-pointer" onClick={() => setShowHistoryMobile(false)} />
-                <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                <div className="flex items-center justify-between border-b border-white/[0.06] pb-2.5">
                   <div className="flex items-center gap-2">
                     <History className="w-4 h-4 text-violet-400" />
                     <span className="text-xs font-mono font-bold uppercase text-[#FAFAFA]">
@@ -745,18 +821,38 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                   </button>
                 </div>
 
+                {/* Mobile History Search Bar */}
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0B0F14] border border-white/[0.08] focus-within:border-violet-500/40 transition-colors">
+                  <Search className="w-3.5 h-3.5 text-[#71717A] shrink-0" />
+                  <input
+                    type="text"
+                    value={historySearch}
+                    onChange={(e) => setHistorySearch(e.target.value)}
+                    placeholder="Search mission history..."
+                    className="w-full bg-transparent border-none outline-none text-xs font-mono text-[#FAFAFA] placeholder-[#52525B]"
+                  />
+                  {historySearch && (
+                    <button
+                      type="button"
+                      onClick={() => setHistorySearch('')}
+                      className="text-[#71717A] hover:text-[#FAFAFA] p-0.5 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
                 <div className="flex-1 overflow-y-auto space-y-1.5 scrollbar-thin">
-                  {sessions.length === 0 ? (
+                  {filteredSessions.length === 0 ? (
                     <div className="p-4 text-center text-xs font-mono text-[#71717A] italic bg-[#0B0F14] rounded-xl border border-white/[0.04]">
-                      No previous chat sessions.
+                      {historySearch ? 'No matching sessions.' : 'No previous chat sessions.'}
                     </div>
                   ) : (
-                    sessions.map((s) => {
+                    filteredSessions.map((s) => {
                       const isCurrent = s.id === sessionId;
                       return (
-                        <button
+                        <div
                           key={s.id}
-                          type="button"
                           onClick={() => loadSession(s)}
                           className={`w-full text-left p-3 rounded-xl text-xs transition-all flex items-center justify-between min-h-[44px] cursor-pointer ${
                             isCurrent
@@ -764,14 +860,24 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                               : 'bg-[#0B0F14] border border-white/[0.04] text-[#A1A1AA] hover:text-[#FAFAFA]'
                           }`}
                         >
-                          <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
+                          <div className="flex items-center gap-2.5 overflow-hidden min-w-0 flex-1 pr-2">
                             <MessageSquare className="w-4 h-4 shrink-0 text-violet-400" />
                             <span className="truncate font-mono text-xs">
                               {s.title || 'Untitled Operation'}
                             </span>
                           </div>
-                          <ChevronRight className="w-4 h-4 text-[#52525B] shrink-0" />
-                        </button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteSession(s.id, e)}
+                              className="p-1.5 rounded-lg text-[#71717A] hover:text-rose-400 hover:bg-rose-500/10 active:scale-95 transition-all cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center"
+                              title="Delete Session"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                            <ChevronRight className="w-4 h-4 text-[#52525B]" />
+                          </div>
+                        </div>
                       );
                     })
                   )}

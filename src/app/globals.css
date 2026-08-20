@@ -164,11 +164,23 @@ button, [role="button"] {
   color: #FAFAFA;
 }
 
-/* ═══════════════════════════════════════════════ */
-/* Textarea Reset                                  */
-/* ═══════════════════════════════════════════════ */
 textarea {
-  field-sizing: content;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Prevent iOS Safari auto-zoom on input/textarea focus (< 16px triggers zoom) */
+@media screen and (max-width: 640px) {
+  input[type="text"],
+  input[type="search"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 
 /* ═══════════════════════════════════════════════ */

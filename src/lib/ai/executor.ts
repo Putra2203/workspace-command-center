@@ -116,13 +116,14 @@ export async function executeIntent(
 
         const realProjectId = await planeService.resolveProjectId(rawProjKey);
         const projects = await planeService.listProjects().catch(() => []);
-        const foundProj = projects.find(p => p.id === realProjectId);
-        const displayKey = foundProj?.identifier || rawProjKey;
+        const targetProjId = realProjectId === 'ALL' ? (projects[0]?.id || 'ALL') : realProjectId;
+        const foundProj = projects.find(p => p.id === targetProjId);
+        const displayKey = foundProj?.identifier || 'PROJECT';
 
         // Create all issues concurrently in parallel
         const createdIssues = await Promise.all(
           titles.map(title =>
-            planeService.createIssue(realProjectId, {
+            planeService.createIssue(targetProjId, {
               name: title,
               priority: intent.entities.priority || 'none',
             })
@@ -149,10 +150,11 @@ export async function executeIntent(
         const rawProjKey = intent.entities.projectKey || 'ALL';
         const realProjectId = await planeService.resolveProjectId(rawProjKey);
         const projects = await planeService.listProjects().catch(() => []);
-        const foundProj = projects.find(p => p.id === realProjectId);
+        const targetProjId = realProjectId === 'ALL' ? (projects[0]?.id || 'ALL') : realProjectId;
+        const foundProj = projects.find(p => p.id === targetProjId);
         const displayKey = foundProj?.identifier || 'PROJECT';
 
-        const newIssue = await planeService.createIssue(realProjectId, {
+        const newIssue = await planeService.createIssue(targetProjId, {
           name: intent.entities.title || 'New Issue via AI Command Center',
           description: intent.entities.description,
           priority: intent.entities.priority || 'none',
@@ -181,16 +183,17 @@ export async function executeIntent(
         
         // Resolve project key, state name, and assignee
         const projects = await planeService.listProjects().catch(() => []);
-        const foundProj = projects.find(p => p.id === realProjectId);
-        const displayKey = foundProj?.identifier || rawProjKey;
+        const targetProjId = (issue as any).project || (issue as any).project_detail?.id || realProjectId;
+        const foundProj = projects.find(p => p.id === targetProjId);
+        const displayKey = foundProj?.identifier || (issue as any).project_detail?.identifier || 'TASK';
 
-        const states = await planeService.listStates(realProjectId).catch(() => []);
+        const states = await planeService.listStates(targetProjId).catch(() => []);
         const stateId = typeof issue.state === 'string' ? issue.state : issue.state?.id || issue.state_detail?.id || '';
         const matchingState = states.find(s => s.id === stateId);
         const stateName = matchingState?.name || issue.state_detail?.name || 'Open';
 
         const assigneeId = issue.assignees && issue.assignees.length > 0 ? issue.assignees[0] : '';
-        const assigneeName = assigneeId ? await planeService.resolveMemberName(realProjectId, assigneeId) : 'Unassigned';
+        const assigneeName = assigneeId ? await planeService.resolveMemberName(targetProjId, assigneeId) : 'Unassigned';
 
         cards.push({
           type: 'info',
@@ -215,10 +218,11 @@ export async function executeIntent(
         }
 
         const realProjectId = await planeService.resolveProjectId(rawProjKey);
+        const { realProjectId: resolvedProject } = await planeService.resolveIssueInfo(realProjectId, intent.entities.issueKey);
         const updatePayload: Record<string, any> = {};
 
         if (intent.entities.state) {
-          const stateId = await planeService.resolveStateId(realProjectId, intent.entities.state);
+          const stateId = await planeService.resolveStateId(resolvedProject, intent.entities.state);
           updatePayload.state = stateId;
         }
 
@@ -226,12 +230,12 @@ export async function executeIntent(
           updatePayload.priority = intent.entities.priority;
         }
 
-        const updatedIssue = await planeService.updateIssue(realProjectId, intent.entities.issueKey, updatePayload);
+        const updatedIssue = await planeService.updateIssue(resolvedProject, intent.entities.issueKey, updatePayload);
         
         // Read-After-Write Verification
         let isVerified = true;
         try {
-          const verifiedIssue = await planeService.getIssue(realProjectId, intent.entities.issueKey);
+          const verifiedIssue = await planeService.getIssue(resolvedProject, intent.entities.issueKey);
           if (updatePayload.state) {
             const currentStateId = typeof verifiedIssue.state === 'string' ? verifiedIssue.state : verifiedIssue.state?.id || verifiedIssue.state_detail?.id;
             isVerified = currentStateId === updatePayload.state;
