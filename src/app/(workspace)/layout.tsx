@@ -26,6 +26,7 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
   const { projects, projectsLoading, issues, fetchingIssues, fetchProjectData, refetchProjects } = useWorkspaceData();
 
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
+  const [hasInitialLoaded, setHasInitialLoaded] = useState(false);
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -37,7 +38,14 @@ function WorkspaceShell({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timer);
   }, []);
 
-  const showSplash = projectsLoading || fetchingIssues || !minTimeElapsed;
+  // Latch initial load completion so background fetches never re-trigger the splash overlay
+  useEffect(() => {
+    if (!projectsLoading && !fetchingIssues && minTimeElapsed) {
+      setHasInitialLoaded(true);
+    }
+  }, [projectsLoading, fetchingIssues, minTimeElapsed]);
+
+  const showSplash = !hasInitialLoaded && (projectsLoading || fetchingIssues || !minTimeElapsed);
 
   const allProjects = useMemo(() => [
     { id: 'ALL', name: 'All Projects', identifier: 'ALL' },
