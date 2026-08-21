@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { Radio, Terminal, Cpu, Database, Cloud } from 'lucide-react';
 
 interface SplashScreenProps {
@@ -21,6 +21,7 @@ export function SplashScreen({
   submessage = 'Synchronizing real-time project telemetry & mission context',
 }: SplashScreenProps) {
   const [currentStep, setCurrentStep] = useState(1);
+  const prefersReducedMotion = useReducedMotion();
 
   useEffect(() => {
     const timer1 = setTimeout(() => setCurrentStep(2), 250);
@@ -45,9 +46,17 @@ export function SplashScreen({
       }}
       className="fixed inset-0 z-[100] bg-[#05070A] bg-technical-grid flex flex-col items-center justify-center overflow-hidden selection:bg-cyan-500/30"
     >
-      {/* Background Ambient Glowing Lights (Cyan top-left, Purple bottom-right) */}
-      <div className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-cyan-500/10 rounded-full blur-[140px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-[500px] h-[500px] bg-violet-500/10 rounded-full blur-[140px] pointer-events-none" />
+      {/* Background Ambient Glowing Lights (Cyan top-left, Purple bottom-right) —
+          radial-gradient instead of a large `filter: blur()`, which is GPU-heavy
+          on lower-end/mobile devices especially under simultaneous rotate animations. */}
+      <div
+        className="absolute top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.10) 0%, transparent 70%)' }}
+      />
+      <div
+        className="absolute bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-[500px] h-[500px] rounded-full pointer-events-none"
+        style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.10) 0%, transparent 70%)' }}
+      />
 
       {/* Center Console Container */}
       <div className="relative flex flex-col items-center gap-6 z-10 p-6 text-center max-w-sm w-full">
@@ -55,7 +64,7 @@ export function SplashScreen({
         <div className="relative flex items-center justify-center">
           {/* Subtle Outer Cyan Orbit */}
           <motion.div
-            animate={{ rotate: 360 }}
+            animate={prefersReducedMotion ? undefined : { rotate: 360 }}
             transition={{
               duration: 10,
               repeat: Infinity,
@@ -66,7 +75,7 @@ export function SplashScreen({
 
           {/* Inner Violet Orbit */}
           <motion.div
-            animate={{ rotate: -360 }}
+            animate={prefersReducedMotion ? undefined : { rotate: -360 }}
             transition={{
               duration: 14,
               repeat: Infinity,
@@ -114,7 +123,7 @@ export function SplashScreen({
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.4, delay: 0.25 }}
-          className="w-full p-3 rounded-xl bg-[#0B0F14]/90 border border-white/[0.08] text-left space-y-2 font-mono text-[11px] shadow-2xl backdrop-blur-md"
+          className="w-full p-3 rounded-xl bg-[#0B0F14]/95 border border-white/[0.08] text-left space-y-2 font-mono text-[11px] shadow-2xl"
         >
           <div className="flex items-center justify-between border-b border-white/[0.06] pb-1.5 text-[9px] uppercase tracking-wider text-[#71717A]">
             <span>SYSTEM TELEMETRY</span>
@@ -161,14 +170,12 @@ export function SplashScreen({
           className="w-full h-1 bg-[#10151C] border border-white/[0.06] rounded-full overflow-hidden relative"
         >
           <motion.div
-            animate={{
-              x: ['-100%', '100%'],
-            }}
-            transition={{
-              duration: 1.4,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            }}
+            animate={prefersReducedMotion ? { x: '0%' } : { x: ['-100%', '100%'] }}
+            transition={
+              prefersReducedMotion
+                ? undefined
+                : { duration: 1.4, repeat: Infinity, ease: 'easeInOut' }
+            }
             className="w-full h-full bg-gradient-to-r from-transparent via-cyan-400 to-violet-500 rounded-full"
           />
         </motion.div>
