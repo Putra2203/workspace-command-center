@@ -61,6 +61,34 @@ describe('parseIntent (regex fallback engine)', () => {
     expect(result.intent).toBe('get_issue');
     expect(result.entities.issueKey).toBe('PROJECT1-31');
   });
+
+  it('detects a single sub-item creation and captures the parent issue key', () => {
+    const result = parseIntent('tambahkan sub-task ke PROJECT1-12: fix validasi form');
+    expect(result.intent).toBe('create_issue');
+    expect(result.entities.parentIssueKey).toBe('PROJECT1-12');
+    expect(result.entities.issueKey).toBeUndefined();
+    expect(result.entities.title).toBe('fix validasi form');
+  });
+
+  it('detects batch sub-item creation from a comma-separated list under a parent issue', () => {
+    const result = parseIntent('tambahkan sub-task ke PROJECT1-12: fix validasi form, tambah loading state');
+    expect(result.intent).toBe('batch_create_issues');
+    expect(result.entities.parentIssueKey).toBe('PROJECT1-12');
+    expect(result.entities.titles).toEqual(['fix validasi form', 'tambah loading state']);
+  });
+
+  it('detects batch sub-item creation from a numbered list under a parent issue', () => {
+    const result = parseIntent('tambahkan sub-task ke PROJECT1-12:\n1. Fix validasi form\n2. Tambah loading state');
+    expect(result.intent).toBe('batch_create_issues');
+    expect(result.entities.parentIssueKey).toBe('PROJECT1-12');
+    expect(result.entities.titles).toEqual(['Fix validasi form', 'Tambah loading state']);
+  });
+
+  it('leaves "pecah ... jadi subtask" on the smart decompose flow, not literal sub-item creation', () => {
+    const result = parseIntent('pecah PROJECT1-12 jadi subtask');
+    expect(result.intent).toBe('decompose');
+    expect(result.entities.parentIssueKey).toBeUndefined();
+  });
 });
 
 describe('buildActionPlanFromIntent', () => {
@@ -87,5 +115,12 @@ describe('buildActionPlanFromIntent', () => {
     const intentResult = parseIntent('tampilkan semua task');
     const plan = buildActionPlanFromIntent(intentResult);
     expect(plan).toBeNull();
+  });
+
+  it('includes the parent issue key in the step changes for a sub-item creation', () => {
+    const intentResult = parseIntent('tambahkan sub-task ke PROJECT1-12: fix validasi form');
+    const plan = buildActionPlanFromIntent(intentResult);
+    expect(plan).not.toBeNull();
+    expect(plan?.steps[0].changes.parent).toBe('PROJECT1-12');
   });
 });

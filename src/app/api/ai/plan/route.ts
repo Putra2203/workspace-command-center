@@ -75,10 +75,38 @@ Respond in JSON format: { "title": "...", "description": "...", "priority": "...
 
     const availableProjects = projects.map(p => ({ id: p.id, identifier: p.identifier, name: p.name }));
 
+    // Best-effort fetch of members/states for the active project, so batch task
+    // creation can resolve assignee names and status labels mentioned in chat.
+    const isBatchLikely = /\n\s*\d+[\.\)]|\bbuat\b.*\btask|\bcreate\b.*\btask|\btambah\b.*\btask/i.test(cleanMessage) ||
+      /^\s*\d+[\.\)]\s*.+?:/m.test(cleanMessage);
+    let availableMembers: { id: string; name: string; email: string }[] = [];
+    let availableStates: { id: string; name: string; group: string }[] = [];
+    if (isBatchLikely && projectId) {
+      try {
+        const realProjectId = await planeService.resolveProjectId(projectId);
+        const [members, states] = await Promise.all([
+          planeService.listMembers(realProjectId).catch(() => []),
+          planeService.listStates(realProjectId).catch(() => []),
+        ]);
+        availableMembers = members
+          .map((m: any) => ({
+            id: m.id,
+            name: `${m.member?.first_name || ''} ${m.member?.last_name || ''}`.trim() || m.member?.email || m.email || '',
+            email: m.member?.email || m.email || '',
+          }))
+          .filter(m => m.name);
+        availableStates = states.map((s: any) => ({ id: s.id, name: s.name, group: s.group }));
+      } catch (ctxErr) {
+        console.warn('Failed to fetch members/states context for batch creation:', ctxErr);
+      }
+    }
+
     const conversationContext = {
       activeProjectId: projectId,
       activeProjectKey: projectId,
       availableProjects,
+      availableMembers,
+      availableStates,
     };
 
     const intentResult = await parseIntentAsync(enrichedMessage, conversationContext);
@@ -89,8 +117,8 @@ Respond in JSON format: { "title": "...", "description": "...", "priority": "...
 
     const tier = classifyIntentTier(intentResult.intent);
 
-    // Build plan asynchronously (supports decomposition & duplicate checks)
-    const plan = await buildActionPlanFromIntentAsync(intentResult, conversationContext);
+    // Build plan asynchronously (supports decomposition, batch metadata enrichment & duplicate checks)
+    const plan = await buildActionPlanFromIntentAsync(intentResult, conversationContext, enrichedMessage);
 
     // Calculate exact tokens (Gemini standard: ~3.8 chars/token + 258 tokens per vision image tile)
     const imageTokenCount = image?.base64Data ? 258 : 0;
@@ -130,6 +158,8 @@ Respond in JSON format: { "title": "...", "description": "...", "priority": "...
         plan,
         actionCards: [],
         tier,
+        members: availableMembers,
+        states: availableStates,
       });
     }
 

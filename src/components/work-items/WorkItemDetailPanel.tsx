@@ -101,7 +101,8 @@ export function WorkItemDetailPanel({
   onOpenIssue,
   onChanged,
 }: WorkItemDetailPanelProps) {
-  const projectKey = issue.project_detail?.identifier || activeProjectKey || 'PROJECT1';
+  const rawProjKey = issue.project_detail?.identifier || (allIssues.find(i => i.id === issue.id)?.project_detail?.identifier) || activeProjectKey || 'PROJECT1';
+  const projectKey = rawProjKey === 'ALL' ? (issue.project_detail?.identifier || (allIssues.find(i => i.id === issue.id)?.project_detail?.identifier) || 'ALL') : rawProjKey;
   const issueKey = `${projectKey}-${issue.sequence_id}`;
 
   const [labels, setLabels] = useState<PlaneLabel[]>([]);
@@ -158,13 +159,14 @@ export function WorkItemDetailPanel({
   );
 
   const subIssues = useMemo(
-    () => allIssues.filter(i => i.parent === issue.id),
+    () => allIssues.filter(i => i.parent === issue.id || (i as any).parent_id === issue.id || (i as any).parent_detail?.id === issue.id),
     [allIssues, issue.id]
   );
 
+  const parentId = issue.parent || (issue as any).parent_id || (issue as any).parent_detail?.id;
   const parentIssue = useMemo(
-    () => (issue.parent ? allIssues.find(i => i.id === issue.parent) || null : null),
-    [allIssues, issue.parent]
+    () => (parentId ? allIssues.find(i => i.id === parentId) || null : null),
+    [allIssues, parentId]
   );
 
   const issueLabels = useMemo(
@@ -483,6 +485,7 @@ export function WorkItemDetailPanel({
 
           <div className="space-y-1 mb-2">
             {subIssues.map(sub => {
+              const subProjKey = sub.project_detail?.identifier || projectKey;
               const isDone = ['completed', 'cancelled'].includes(
                 (states.find(s => s.id === stateIdOf(sub))?.group || '').toLowerCase()
               );
@@ -498,15 +501,30 @@ export function WorkItemDetailPanel({
                   >
                     <Check className="w-2.5 h-2.5" />
                   </button>
-                  <button onClick={() => onOpenIssue(sub.id)} className="flex-1 min-w-0 text-left flex items-center gap-2">
-                    <span className="text-[10px] text-blue-400 font-mono shrink-0">{projectKey}-{sub.sequence_id}</span>
+                  <button onClick={() => onOpenIssue(sub.id)} className="flex-1 min-w-0 text-left flex items-center gap-2 cursor-pointer">
+                    <span className="text-[10px] text-cyan-400 font-mono shrink-0">{subProjKey}-{sub.sequence_id}</span>
                     <span className={`text-xs truncate ${isDone ? 'text-[#71717A] line-through' : 'text-[#FAFAFA]'}`}>{titleOf(sub)}</span>
                   </button>
                 </div>
               );
             })}
             {subIssues.length === 0 && (
-              <p className="text-xs text-[#52525B] px-1">No sub-items yet.</p>
+              <div className="p-3 rounded-lg bg-[#111113] border border-white/5 space-y-1.5">
+                <p className="text-xs text-[#71717A]">No sub-items under this task.</p>
+                {parentIssue && (
+                  <div className="text-[11px] font-mono text-[#71717A] flex items-center gap-1.5 pt-0.5">
+                    <span>Task ini merupakan sub-item dari:</span>
+                    <button
+                      type="button"
+                      onClick={() => onOpenIssue(parentIssue.id)}
+                      className="text-cyan-400 hover:underline inline-flex items-center gap-1 font-semibold cursor-pointer"
+                    >
+                      <CornerUpLeft className="w-3 h-3" />
+                      <span>{parentIssue.project_detail?.identifier || projectKey}-{parentIssue.sequence_id} — {titleOf(parentIssue)}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 

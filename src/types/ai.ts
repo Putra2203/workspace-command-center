@@ -18,11 +18,21 @@ export interface IntentResult {
     title?: string;
     description?: string;
     titles?: string[]; // For batch task creation
-    tasks?: { title: string; description?: string; priority?: string }[]; // For rich batch task creation with descriptions
+    tasks?: {
+      title: string;
+      description?: string;
+      priority?: string;
+      assignee?: string; // Per-task assignee name/email, resolved to UUID at execution time
+      state?: string; // Per-task status name (e.g. "Todo", "In Progress")
+      dueDate?: string; // Per-task due date, ISO (YYYY-MM-DD) after LLM normalization
+    }[]; // For rich batch task creation with descriptions
+    dueDate?: string; // Shared due date applied to a whole batch when not overridden per-task
+    parentIssueKey?: string; // When set, new issue(s) are created as sub-items of this existing issue
     filter?: string;
     userScope?: 'my_tasks' | 'all';
     chatReply?: string; // For conversational AI responses
     options?: { label: string; value: string; action?: string }[]; // For clarification chips
+    batchDefaultsMissing?: ('assignee' | 'state' | 'dueDate')[]; // Fields not mentioned anywhere in the batch command
   };
   confidence: number;
 }

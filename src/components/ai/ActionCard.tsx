@@ -39,9 +39,11 @@ interface ActionPlanCardProps {
   plan: ActionPlan;
   onApprove: (plan: ActionPlan) => Promise<void>;
   onCancel: () => void;
+  members?: { id: string; name: string; email: string }[];
+  states?: { id: string; name: string; group: string }[];
 }
 
-export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProps) {
+export function ActionPlanCard({ plan, onApprove, onCancel, members = [], states = [] }: ActionPlanCardProps) {
   const [isExecuting, setIsExecuting] = useState(false);
   const [isCancelled, setIsCancelled] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -217,7 +219,35 @@ export function ActionPlanCard({ plan, onApprove, onCancel }: ActionPlanCardProp
                     }`}
                   >
                     <span className="text-[#71717A] font-mono text-[10px] uppercase block">{k}:</span>
-                    {isEditing ? (
+                    {isEditing && k === 'assignee' && members.length > 0 ? (
+                      <select
+                        value={String(v)}
+                        onChange={(e) => handleStepChange(idx, `changes.${k}`, e.target.value)}
+                        className="text-[#FAFAFA] bg-[#05070A] px-1.5 py-1 rounded border border-violet-500/30 outline-none text-xs w-full mt-0.5"
+                      >
+                        <option value="Unassigned">Unassigned</option>
+                        {members.map((m) => (
+                          <option key={m.id} value={m.name}>{m.name}</option>
+                        ))}
+                      </select>
+                    ) : isEditing && k === 'state' && states.length > 0 ? (
+                      <select
+                        value={String(v)}
+                        onChange={(e) => handleStepChange(idx, `changes.${k}`, e.target.value)}
+                        className="text-[#FAFAFA] bg-[#05070A] px-1.5 py-1 rounded border border-violet-500/30 outline-none text-xs w-full mt-0.5"
+                      >
+                        {states.map((s) => (
+                          <option key={s.id} value={s.name}>{s.name}</option>
+                        ))}
+                      </select>
+                    ) : isEditing && k === 'dueDate' ? (
+                      <input
+                        type="date"
+                        value={String(v)}
+                        onChange={(e) => handleStepChange(idx, `changes.${k}`, e.target.value)}
+                        className="text-[#FAFAFA] bg-[#05070A] px-1.5 py-1 rounded border border-violet-500/30 outline-none text-xs w-full mt-0.5"
+                      />
+                    ) : isEditing ? (
                       <input
                         type="text"
                         value={String(v)}

@@ -3,8 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, CheckCircle2, Clock, User, Tag, ArrowUpRight, Loader2, AlertCircle, Check } from 'lucide-react';
+import { X, CheckCircle2, Clock, User, Tag, ArrowUpRight, Loader2, AlertCircle, Check, ListPlus } from 'lucide-react';
 import { PlaneIssue } from '@/types/plane';
+import { useWorkspaceStore } from '@/stores/workspace-store';
 
 interface IssuePreviewDrawerProps {
   issueKey: string | null;
@@ -27,6 +28,13 @@ export function IssuePreviewDrawer({
   const [isUpdating, setIsUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const setPendingCommand = useWorkspaceStore((s) => s.setPendingCommand);
+
+  const handleAddSubItem = () => {
+    if (!issueKey) return;
+    setPendingCommand(`tambahkan sub-task ke ${issueKey}: `);
+    onClose();
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -215,6 +223,17 @@ export function IssuePreviewDrawer({
                         <span>Start Work</span>
                       </button>
                     </div>
+                  </div>
+
+                  {/* Sub-item Creation */}
+                  <div className="space-y-2 pt-2 border-t border-white/[0.08]">
+                    <button
+                      onClick={handleAddSubItem}
+                      className="w-full p-2.5 rounded-xl bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/30 text-violet-300 text-xs font-mono font-medium flex items-center justify-center gap-1.5 transition-colors min-h-[44px]"
+                    >
+                      <ListPlus className="w-4 h-4 text-violet-400" />
+                      <span>+ Add Sub-item to {issueKey}</span>
+                    </button>
                   </div>
                 </>
               ) : null}

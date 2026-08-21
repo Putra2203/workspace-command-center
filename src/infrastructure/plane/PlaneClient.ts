@@ -487,6 +487,14 @@ export class PlaneService {
       payload.state = await this.resolveStateId(realProjectId, payload.state);
     }
 
+    // Resolve parent issue key/UUID -> parent_id, creating a sub-issue when provided
+    if (payload.parent) {
+      payload.parent_id = this.isUUID(payload.parent)
+        ? payload.parent
+        : await this.resolveIssueId(realProjectId, payload.parent);
+      delete payload.parent;
+    }
+
     const response = await this.client.post(`/workspaces/${slug}/projects/${realProjectId}/issues/`, payload);
     await this.cache.deletePrefix(`issues_${slug}_${realProjectId}`);
     return response.data;

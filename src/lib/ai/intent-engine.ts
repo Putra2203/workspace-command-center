@@ -234,6 +234,58 @@ export function parseIntent(message: string, context?: ConversationContext): Int
     result.entities.filter = 'my_tasks';
   }
 
+  // 6.5. Check for Sub-item / Sub-task Creation ("tambahkan sub-task ke BSJ-12: ...")
+  // Must run before the generic creation check (10) and the issueKey fallback (13),
+  // since a bare issueKey there would otherwise be read as an update/get target
+  // instead of the parent for a newly created child issue.
+  // "pecah/decompose ... jadi subtask" is intentionally excluded here — that phrasing
+  // means "AI, figure out the subtasks yourself" and belongs to the smart decompose flow
+  // below, not this literal "here is my explicit list of sub-items" flow.
+  const subItemTriggerRegex = /\b(sub[\s-]?task|sub[\s-]?issue|sub[\s-]?item|subtask|anak\s*task|child\s*task)\b/i;
+  const isDecomposeVerbPresent = /pecah|decompose|break down|bagikan|rencanakan/i.test(lowerMessage);
+  if (subItemTriggerRegex.test(lowerMessage) && result.entities.issueKey && !isDecomposeVerbPresent) {
+    const parentKey = result.entities.issueKey;
+    const escapedParentKey = parentKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const afterParentMatch = message.match(new RegExp(`${escapedParentKey}\\s*[:\\-]?\\s*([\\s\\S]*)`, 'i'));
+    const remainder = (afterParentMatch ? afterParentMatch[1] : '').trim();
+
+    result.entities.parentIssueKey = parentKey;
+    delete result.entities.issueKey;
+
+    if (remainder.length > 0) {
+      const lines = remainder.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const structuredTasks: { title: string; description?: string }[] = [];
+      for (const line of lines) {
+        const m = line.match(/^(?:\d+[\.\)]|\-|\*)\s*([^:]+?)(?:\s*:\s*(.+))?$/);
+        if (m && m[1] && m[1].length > 1) {
+          structuredTasks.push({ title: m[1].trim(), description: m[2]?.trim() });
+        }
+      }
+
+      if (structuredTasks.length >= 2) {
+        result.intent = 'batch_create_issues';
+        result.entities.tasks = structuredTasks;
+        result.entities.titles = structuredTasks.map(t => t.title);
+        result.confidence = 0.92;
+        return result;
+      }
+
+      const commaParts = remainder.split(/,|\bdan\b|\blalu\b|\bserta\b/i).map(s => s.trim()).filter(s => s.length > 2);
+      if (commaParts.length >= 2) {
+        result.intent = 'batch_create_issues';
+        result.entities.titles = commaParts;
+        result.entities.tasks = commaParts.map(t => ({ title: t }));
+        result.confidence = 0.9;
+        return result;
+      }
+
+      result.intent = 'create_issue';
+      result.entities.title = remainder;
+      result.confidence = 0.9;
+      return result;
+    }
+  }
+
   // 7. Check for Decomposition / Planning prompt
   const isDecomposePrompt = /pecah|decompose|break down|bagikan|rencanakan|plan (?:sprint|feature)?/i.test(lowerMessage);
   if (isDecomposePrompt) {
@@ -371,15 +423,139 @@ export function parseIntent(message: string, context?: ConversationContext): Int
 }
 
 /**
+ * Enriches already-extracted batch task titles/descriptions with assignee, status,
+ * and due date — resolved from either a shared mention in the raw command
+ * ("assign ke Dimas, status Todo, deadline besok, buat semua ini: ...") or an
+ * explicit per-line override ("7. Title - assign ke Budi, deadline Jumat").
+ * Falls back silently (no enrichment) when Gemini is unavailable.
+ */
+export async function enrichBatchTasksWithMetadata(
+  tasks: { title: string; description?: string; priority?: string }[],
+  rawMessage: string,
+  context?: ConversationContext
+): Promise<{
+  tasks: { title: string; description?: string; priority?: string; assignee?: string; state?: string; dueDate?: string }[];
+  missing: ('assignee' | 'state' | 'dueDate')[];
+}> {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) {
+    return { tasks, missing: ['assignee', 'state', 'dueDate'] };
+  }
+
+  try {
+    const { GoogleGenAI } = await import('@google/genai');
+    const ai = new GoogleGenAI({ apiKey });
+
+    const membersList = context?.availableMembers?.length
+      ? context.availableMembers.map(m => `"${m.name}" (${m.email})`).join(', ')
+      : 'None available';
+    const statesList = context?.availableStates?.length
+      ? context.availableStates.map(s => `"${s.name}"`).join(', ')
+      : 'Backlog, Todo, In Progress, Done, Cancelled';
+    const todayIso = new Date().toISOString().slice(0, 10);
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `You are extracting task metadata for a bulk work-item creation command in a project management tool.
+
+Today's date: ${todayIso}
+Known workspace members: [${membersList}]
+Known status names: [${statesList}]
+
+The user's raw command:
+"""
+${rawMessage}
+"""
+
+Already-parsed task titles (in order): ${JSON.stringify(tasks.map(t => t.title))}
+
+For EACH task above, determine:
+- "assignee": a member name from the known list if mentioned (shared for all tasks, or specific to that task's line). Omit if never mentioned anywhere.
+- "state": a status name from the known list if mentioned. Omit if never mentioned anywhere.
+- "dueDate": resolve any relative date mention ("besok", "minggu depan", "Jumat", "hari ini") into an absolute ISO date (YYYY-MM-DD) using today's date as reference. Omit if never mentioned anywhere.
+
+A single shared mention (e.g. "assign semua ke Dimas, deadline besok") applies to ALL tasks unless a specific task line explicitly overrides it.
+Also return "missingFields": an array listing which of "assignee", "state", "dueDate" were NOT mentioned anywhere in the command (so none of the tasks have that field).
+
+Output ONLY JSON: { "tasks": [{ "assignee": "...", "state": "...", "dueDate": "..." }, ...], "missingFields": ["assignee", "state", "dueDate"] }
+The "tasks" array must have exactly ${tasks.length} entries, in the same order as the input titles.`,
+      config: { responseMimeType: 'application/json' },
+    });
+
+    const text = typeof (response as any).text === 'function' ? (response as any).text() : (response as any).text;
+    if (!text) return { tasks, missing: ['assignee', 'state', 'dueDate'] };
+
+    const parsed = JSON.parse(text);
+    const metaByIndex: { assignee?: string; state?: string; dueDate?: string }[] =
+      Array.isArray(parsed?.tasks) ? parsed.tasks : [];
+    const missing: ('assignee' | 'state' | 'dueDate')[] = Array.isArray(parsed?.missingFields) ? parsed.missingFields : [];
+
+    const enriched = tasks.map((t, i) => ({
+      ...t,
+      assignee: metaByIndex[i]?.assignee || undefined,
+      state: metaByIndex[i]?.state || undefined,
+      dueDate: metaByIndex[i]?.dueDate || undefined,
+    }));
+
+    return { tasks: enriched, missing };
+  } catch (err) {
+    console.warn('Batch metadata enrichment fallback (assignee/state/dueDate left unset):', err);
+    return { tasks, missing: ['assignee', 'state', 'dueDate'] };
+  }
+}
+
+/**
  * Builds an ActionPlan for mutating intents so that changes can be previewed
  * and explicitly approved before modifying workspace data.
  */
 export async function buildActionPlanFromIntentAsync(
   intentResult: IntentResult,
-  context?: ConversationContext
+  context?: ConversationContext,
+  rawMessage?: string
 ): Promise<ActionPlan | null> {
   const targetProject = intentResult.entities.projectKey || context?.activeProjectKey || 'PROJECT';
   const planId = `plan_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+  if (intentResult.intent === 'batch_create_issues') {
+    const rawTasks: { title: string; description?: string; priority?: string }[] =
+      intentResult.entities.tasks || (intentResult.entities.titles || []).map(t => ({ title: t }));
+
+    const { tasks, missing } = await enrichBatchTasksWithMetadata(rawTasks, rawMessage || '', context);
+
+    const parentKey = intentResult.entities.parentIssueKey;
+
+    const steps: ActionStep[] = tasks.map(t => ({
+      operation: 'createIssue',
+      target: targetProject,
+      changes: {
+        title: t.title,
+        ...(t.description ? { description: t.description } : {}),
+        priority: t.priority || 'none',
+        assignee: t.assignee || 'Unassigned',
+        state: t.state || 'Backlog',
+        ...(t.dueDate ? { dueDate: t.dueDate } : {}),
+        ...(parentKey ? { parent: parentKey } : {}),
+      },
+    }));
+
+    const missingLabels: Record<string, string> = { assignee: 'assignee', state: 'status', dueDate: 'tanggal deadline' };
+    const missingNote = missing.length > 0
+      ? ` ⚠️ ${missing.map(m => missingLabels[m]).join(', ')} tidak disebutkan — sudah diisi default, silakan sesuaikan sebelum approve.`
+      : '';
+    const parentNote = parentKey ? ` sebagai sub-item dari **${parentKey}**` : '';
+
+    const plan: ActionPlan = {
+      id: planId,
+      intent: 'batch_create_issues',
+      summary: `Buat ${tasks.length} task sekaligus di project ${targetProject}${parentNote}.${missingNote}`,
+      risk: 'medium',
+      requiresApproval: true,
+      steps,
+    };
+
+    const validated = ActionPlanSchema.safeParse(plan);
+    return validated.success ? validated.data : null;
+  }
 
   if (intentResult.intent === 'decompose' || intentResult.intent === 'plan') {
     const promptText = intentResult.entities.title || 'Feature';
@@ -420,11 +596,14 @@ export function buildActionPlanFromIntent(
     if (intentResult.entities.description) changes.description = intentResult.entities.description;
     if (intentResult.entities.priority) changes.priority = intentResult.entities.priority;
     if (intentResult.entities.state) changes.state = intentResult.entities.state;
+    if (intentResult.entities.parentIssueKey) changes.parent = intentResult.entities.parentIssueKey;
+
+    const parentNote = intentResult.entities.parentIssueKey ? ` sebagai sub-item dari ${intentResult.entities.parentIssueKey}` : '';
 
     const plan: ActionPlan = {
       id: planId,
       intent: 'create_issue',
-      summary: `Buat task "${title}" di project ${targetProject}`,
+      summary: `Buat task "${title}"${parentNote} di project ${targetProject}`,
       risk: 'low',
       requiresApproval: true,
       steps: [

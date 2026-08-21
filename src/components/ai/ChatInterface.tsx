@@ -41,6 +41,8 @@ interface Message {
   actionCards?: any[];
   plan?: ActionPlan | null;
   imageUrl?: string;
+  members?: { id: string; name: string; email: string }[];
+  states?: { id: string; name: string; group: string }[];
 }
 
 interface ChatSession {
@@ -311,6 +313,8 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
         content: data.reply || data.analysis || data.message || data.content || 'Mission analysis complete.',
         plan: data.plan || null,
         actionCards: data.actionCards || [],
+        members: data.members || [],
+        states: data.states || [],
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -602,6 +606,8 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
                       plan={m.plan}
                       onApprove={handleApprovePlan}
                       onCancel={() => {}}
+                      members={m.members}
+                      states={m.states}
                     />
                   )}
 

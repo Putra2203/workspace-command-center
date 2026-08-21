@@ -31,7 +31,26 @@ export async function POST(request: NextRequest) {
       try {
         if (step.operation === 'createIssue') {
           const realProjectId = await planeService.resolveProjectId(step.target);
-          const created = await planeService.createIssue(realProjectId, step.changes as Record<string, any>);
+
+          // Translate AI-facing fields (assignee name, dueDate) into Plane API fields
+          // (assignees UUID array, target_date) before sending the create request.
+          const { assignee, dueDate, ...restChanges } = step.changes as Record<string, any>;
+          const payload: Record<string, any> = { ...restChanges };
+
+          if (assignee && assignee !== 'Unassigned') {
+            try {
+              const memberId = await planeService.resolveMemberId(realProjectId, assignee);
+              if (memberId) payload.assignees = [memberId];
+            } catch (resolveErr) {
+              console.warn(`Could not resolve assignee "${assignee}" for step on ${step.target}:`, resolveErr);
+            }
+          }
+
+          if (dueDate) {
+            payload.target_date = dueDate;
+          }
+
+          const created = await planeService.createIssue(realProjectId, payload);
           actionCards.push({
             type: 'issue_created',
             title: `Task "${created.name}" berhasil dibuat`,
