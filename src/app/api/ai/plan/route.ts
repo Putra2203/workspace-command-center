@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { parseIntentAsync, buildActionPlanFromIntentAsync } from '@/lib/ai/intent-engine';
+import { parseIntentAsync, buildActionPlanFromIntentAsync, type ChatHistoryTurn } from '@/lib/ai/intent-engine';
 import { classifyIntentTier } from '@/lib/ai/router';
 import { executeIntent } from '@/lib/ai/executor';
 import { planeService } from '@/infrastructure/plane/PlaneClient';
@@ -8,6 +8,47 @@ import { findSimilarIssues } from '@/domain/work_items/duplicate-detection';
 import { checkRateLimit } from '@/lib/security/rate-limiter';
 import { scrubPII } from '@/lib/security/pii-scrubber';
 import { logAiUsage } from '@/infrastructure/telemetry/ai-usage-logger';
+import { prisma } from '@/infrastructure/db/client';
+
+const CHAT_HISTORY_WINDOW = 10;
+
+// The frontend persists the user's turn via a fire-and-forget PUT that can race ahead of
+// this request, and for slash commands (/plan, /today, ...) the persisted content (raw input,
+// e.g. "/plan Payment Gateway") differs from the message this route receives (the expanded
+// command, e.g. "pecah feature Payment Gateway menjadi subtask") — so a content-equality check
+// can't reliably catch it. Recency is a more robust signal: any 'user' row written in the last
+// few seconds is almost certainly that same race, not a genuine earlier turn.
+const RECENT_DUPLICATE_WINDOW_MS = 5000;
+
+/**
+ * Fetches the last N messages of a session for multi-turn intent resolution
+ * (e.g. "ubah priority-nya jadi urgent" referring to an issue mentioned earlier).
+ * Best-effort: local/uninitialized sessions or a missing Prisma model return no history.
+ */
+async function fetchRecentChatHistory(sessionId: unknown): Promise<ChatHistoryTurn[]> {
+  if (typeof sessionId !== 'string' || !sessionId || sessionId.startsWith('local-')) {
+    return [];
+  }
+  try {
+    const recent = await prisma.chatMessage.findMany({
+      where: { sessionId },
+      orderBy: { createdAt: 'desc' },
+      take: CHAT_HISTORY_WINDOW,
+      select: { role: true, content: true, createdAt: true },
+    });
+    const chronological = recent.reverse();
+
+    const last = chronological[chronological.length - 1];
+    if (last && last.role === 'user' && Date.now() - last.createdAt.getTime() < RECENT_DUPLICATE_WINDOW_MS) {
+      chronological.pop();
+    }
+
+    return chronological.map((m) => ({ role: m.role as ChatHistoryTurn['role'], content: m.content }));
+  } catch (err) {
+    console.warn('Failed to fetch chat history for multi-turn context:', err);
+    return [];
+  }
+}
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -22,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { message, projectId, userScope, image } = body;
+    const { message, projectId, userScope, image, sessionId } = body;
 
     if (!message || typeof message !== 'string') {
       return Response.json({ error: 'Valid message string is required' }, { status: 400 });
@@ -68,9 +109,10 @@ Respond in JSON format: { "title": "...", "description": "...", "priority": "...
     const enrichedMessage = cleanMessage + visionContext;
 
     // Fetch workspace context concurrently
-    const [projects, currentUser] = await Promise.all([
+    const [projects, currentUser, chatHistory] = await Promise.all([
       planeService.listProjects().catch(() => []),
       getCurrentUserContext(planeService).catch(() => null),
+      fetchRecentChatHistory(sessionId),
     ]);
 
     const availableProjects = projects.map(p => ({ id: p.id, identifier: p.identifier, name: p.name }));
@@ -109,7 +151,7 @@ Respond in JSON format: { "title": "...", "description": "...", "priority": "...
       availableStates,
     };
 
-    const intentResult = await parseIntentAsync(enrichedMessage, conversationContext);
+    const intentResult = await parseIntentAsync(enrichedMessage, conversationContext, chatHistory);
 
     if (!intentResult.entities.projectKey && projectId) {
       intentResult.entities.projectKey = projectId;

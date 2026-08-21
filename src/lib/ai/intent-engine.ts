@@ -1,20 +1,204 @@
 import { IntentResult, ConversationContext, ActionPlan, ActionStep } from '@/types/ai';
+import type { FunctionDeclaration } from '@google/genai';
 import { ActionPlanSchema } from '@/types/schemas';
 import { classifyIntentTier, selectModelForTier } from './router';
 import { decomposeFeatureToSubtasks } from './decomposition';
+
+export type ChatHistoryTurn = { role: 'user' | 'assistant'; content: string };
+
+const KNOWN_INTENT_NAMES = [
+  'list_projects', 'list_issues', 'create_issue', 'batch_create_issues',
+  'decompose', 'update_issue', 'get_issue', 'help', 'chat',
+] as const;
+
+/**
+ * Calls Gemini with native function-calling (one function declaration per intent) instead of
+ * a free-text "return JSON" prompt — the model is constrained to emit a structured, schema-valid
+ * function call, which removes the JSON.parse-fails-on-malformed-output failure class entirely
+ * and makes adding a new intent a matter of adding one declaration rather than four disconnected edits.
+ *
+ * `history` (recent prior turns of the same chat session) is passed as multi-turn `contents` purely
+ * so the model can resolve references ("-nya", "task itu", a previously mentioned issue) — it is always
+ * asked to classify only the CURRENT (last) message.
+ */
+async function parseIntentViaLLM(
+  message: string,
+  context: ConversationContext | undefined,
+  history: ChatHistoryTurn[],
+  model: string
+): Promise<IntentResult | null> {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) return null;
+
+  try {
+    const { GoogleGenAI, Type, FunctionCallingConfigMode } = await import('@google/genai');
+    const ai = new GoogleGenAI({ apiKey });
+
+    const projectsList = context?.availableProjects?.length
+      ? context.availableProjects.map(p => `${p.identifier}: "${p.name}" (id: ${p.id})`).join(', ')
+      : 'None specified';
+    const priorityEnum = ['urgent', 'high', 'medium', 'low', 'none'];
+
+    const taskItemSchema = {
+      type: Type.OBJECT,
+      properties: {
+        title: { type: Type.STRING, description: 'Concise task title.' },
+        description: { type: Type.STRING },
+        priority: { type: Type.STRING, enum: priorityEnum },
+      },
+      required: ['title'],
+    };
+
+    const functionDeclarations: FunctionDeclaration[] = [
+      {
+        name: 'list_projects',
+        description: 'List all projects in the workspace.',
+        parameters: { type: Type.OBJECT, properties: {} },
+      },
+      {
+        name: 'list_issues',
+        description: 'List/show issues or tasks, optionally filtered by project, priority, status, or assignment scope.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            projectKey: { type: Type.STRING, description: 'Project identifier or name mentioned by the user.' },
+            userScope: { type: Type.STRING, enum: ['my_tasks', 'all'] },
+            priority: { type: Type.STRING, enum: priorityEnum },
+            state: { type: Type.STRING, description: 'Status name mentioned, e.g. "Done", "In Progress".' },
+          },
+        },
+      },
+      {
+        name: 'create_issue',
+        description: 'Create a single new issue/task.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            title: { type: Type.STRING },
+            description: { type: Type.STRING },
+            priority: { type: Type.STRING, enum: priorityEnum },
+            projectKey: { type: Type.STRING },
+            state: { type: Type.STRING },
+            parentIssueKey: {
+              type: Type.STRING,
+              description: 'Set ONLY if the user explicitly wants this created as a sub-item/child of an existing issue key.',
+            },
+          },
+          required: ['title'],
+        },
+      },
+      {
+        name: 'batch_create_issues',
+        description: 'Create multiple new issues/tasks at once from a list the user provided.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            projectKey: { type: Type.STRING },
+            parentIssueKey: {
+              type: Type.STRING,
+              description: 'Set ONLY if the user explicitly wants these created as sub-items/children of an existing issue key.',
+            },
+            tasks: { type: Type.ARRAY, items: taskItemSchema },
+          },
+          required: ['tasks'],
+        },
+      },
+      {
+        name: 'decompose',
+        description: 'Break down / decompose a feature or epic into subtasks using AI judgement — use this when the user asks the assistant to figure out the subtasks itself, not when they already listed the items (that is batch_create_issues).',
+        parameters: {
+          type: Type.OBJECT,
+          properties: { title: { type: Type.STRING }, projectKey: { type: Type.STRING } },
+          required: ['title'],
+        },
+      },
+      {
+        name: 'update_issue',
+        description: 'Update the status/priority of an existing issue.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            issueKey: { type: Type.STRING },
+            state: { type: Type.STRING },
+            priority: { type: Type.STRING, enum: priorityEnum },
+          },
+          required: ['issueKey'],
+        },
+      },
+      {
+        name: 'get_issue',
+        description: 'Get/show details of one specific existing issue.',
+        parameters: { type: Type.OBJECT, properties: { issueKey: { type: Type.STRING } }, required: ['issueKey'] },
+      },
+      {
+        name: 'help',
+        description: 'The user is asking what the assistant can do.',
+        parameters: { type: Type.OBJECT, properties: {} },
+      },
+      {
+        name: 'chat',
+        description: 'General conversation, questions, or advice that is not a project-management command.',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            chatReply: { type: Type.STRING, description: 'A helpful reply to the user, written in the same language they used.' },
+          },
+          required: ['chatReply'],
+        },
+      },
+    ];
+
+    const contents = [
+      ...history.map(h => ({ role: h.role === 'assistant' ? 'model' : 'user', parts: [{ text: h.content }] })),
+      { role: 'user', parts: [{ text: message }] },
+    ];
+
+    const response = await ai.models.generateContent({
+      model,
+      contents,
+      config: {
+        systemInstruction: `You are the intent classifier for Erdavid Work OS (Plane project management).
+Active project: "${context?.activeProjectKey || context?.activeProjectId || 'ALL'}"
+Available workspace projects: [${projectsList}]
+The conversation history is provided ONLY so you can resolve references such as "-nya", "task itu", "that one", or a previously mentioned issue/project. Always classify the intent of the CURRENT (most recent) user message — never re-classify an earlier turn. Always respond by calling exactly one function.`,
+        tools: [{ functionDeclarations }],
+        toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.ANY } },
+      },
+    });
+
+    const call = response.functionCalls?.[0];
+    if (!call?.name || !(KNOWN_INTENT_NAMES as readonly string[]).includes(call.name)) {
+      return null;
+    }
+
+    return {
+      intent: call.name as IntentResult['intent'],
+      entities: (call.args as IntentResult['entities']) || {},
+      confidence: 0.95,
+    };
+  } catch (err) {
+    console.warn('Gemini function-calling intent parser failed, falling back to L0 engine:', err);
+    return null;
+  }
+}
 
 /**
  * Parses user input to determine the intent and extract relevant entities.
  * Supports Plane commands, bulk task creation, decomposition, and Gemini LLM conversational chat.
  */
-export async function parseIntentAsync(message: string, context?: ConversationContext): IntentResultAsync {
+export async function parseIntentAsync(
+  message: string,
+  context?: ConversationContext,
+  history: ChatHistoryTurn[] = []
+): IntentResultAsync {
   const trimmed = message.trim();
   const lowerMsg = trimmed.toLowerCase();
-  
+
   // Strict check for pure greeting (ONLY when no command follows)
   const isPureGreeting = /^(hai|halo|hi|hey|hello|p|tes|test|assalamu['a]?laikum|selamat pagi|selamat siang|selamat malam)\s*[!.]*$/i.test(lowerMsg);
 
-  // 1. First Tier: L0 Deterministic Parser (0 Tokens)
+  // 1. First Tier: L0 Deterministic Parser (0 Tokens) — kept as a fast, free path for
+  // unambiguous commands so cheap/common cases never pay for an LLM round-trip.
   const deterministicResult = parseIntent(message, context);
   if (deterministicResult.intent !== 'unknown' && deterministicResult.confidence >= 0.8) {
     return deterministicResult;
@@ -31,79 +215,16 @@ export async function parseIntentAsync(message: string, context?: ConversationCo
     };
   }
 
-  // 3. Second Tier: Gemini 2.5 Model (When deterministic rules are ambiguous)
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (apiKey) {
-    try {
-      const { GoogleGenAI } = await import('@google/genai');
-      const ai = new GoogleGenAI({ apiKey });
-
-      const tier = classifyIntentTier(deterministicResult.intent);
-      const model = selectModelForTier(tier);
-
-      const projectsList = context?.availableProjects
-        ? context.availableProjects.map(p => `${p.identifier}: "${p.name}" (id: ${p.id})`).join(', ')
-        : 'None specified';
-
-      const response = await ai.models.generateContent({
-        model,
-        contents: `You are an AI intent parser for Erdavid Work OS (Plane Project Management).
-Analyze the user prompt and return structured JSON with intent and extracted entities.
-
-Valid intents: "list_projects", "list_issues", "create_issue", "batch_create_issues", "decompose", "plan", "get_issue", "update_issue", "help", "chat", "unknown".
-
-Context:
-- Active Project: "${context?.activeProjectKey || context?.activeProjectId || 'ALL'}"
-- Available Workspace Projects: [${projectsList}]
-
-Instructions:
-1. If the user asks for their tasks ("tugasku", "tugas saya", "my tasks"), return intent "list_issues" with userScope "my_tasks".
-2. If the user asks to list/show tasks in a project ("list task di BSJ Phase 4"), resolve projectKey to the project identifier (e.g. "BSJ") or exact name.
-3. For batch task creation (multi-line or numbered list): return "batch_create_issues" with array of tasks.
-4. For feature breakdown / planning: return "decompose" with title.
-5. For task status/priority change: return "update_issue" with issueKey and target state/priority.
-6. For conversational queries/advice: return "chat" with a helpful chatReply.
-
-Output JSON format:
-{
-  "intent": "list_issues|create_issue|batch_create_issues|decompose|update_issue|get_issue|list_projects|chat|unknown",
-  "entities": {
-    "projectKey": "...",
-    "issueKey": "...",
-    "title": "...",
-    "description": "...",
-    "priority": "urgent|high|medium|low|none",
-    "state": "...",
-    "userScope": "my_tasks|all",
-    "tasks": [{ "title": "...", "description": "...", "priority": "..." }],
-    "chatReply": "..."
-  },
-  "confidence": 0.95
-}
-
-User Prompt: "${message}"`,
-        config: {
-          responseMimeType: 'application/json',
-        },
-      });
-
-      const text = typeof (response as any).text === 'function' ? (response as any).text() : (response as any).text;
-      if (text) {
-        const parsed = JSON.parse(text);
-        if (parsed && parsed.intent) {
-          return {
-            intent: parsed.intent,
-            entities: parsed.entities || {},
-            confidence: parsed.confidence || 0.95,
-          };
-        }
-      }
-    } catch (err) {
-      console.warn('Gemini LLM Intent Parser Fallback to L0 Engine:', err);
-    }
+  // 3. Second Tier: Gemini function-calling (when deterministic rules are ambiguous),
+  // with recent chat history attached so multi-turn follow-ups resolve correctly.
+  const tier = classifyIntentTier(deterministicResult.intent);
+  const model = selectModelForTier(tier);
+  const llmResult = await parseIntentViaLLM(message, context, history, model);
+  if (llmResult) {
+    return llmResult;
   }
 
-  // 4. Fallback when LLM is unavailable
+  // 4. Fallback when LLM is unavailable or fails
   if (deterministicResult.intent === 'unknown') {
     return {
       intent: 'chat',
