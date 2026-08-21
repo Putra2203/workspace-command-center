@@ -20,50 +20,26 @@ export default function AppleIcon() {
         <div
           style={{
             position: 'absolute',
-            width: 140,
-            height: 140,
+            width: 150,
+            height: 150,
             borderRadius: '50%',
-            background: 'radial-gradient(circle, rgba(56,189,248,0.18) 0%, transparent 70%)',
+            background: 'radial-gradient(circle, rgba(139,92,246,0.45) 0%, transparent 70%)',
+            top: 10,
+            right: -10,
           }}
         />
         <div
           style={{
-            position: 'relative',
-            width: 116,
-            height: 116,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            width: 74,
+            height: 74,
+            borderTop: '22px solid #38BDF8',
+            borderRight: '22px solid #38BDF8',
+            borderBottom: '22px solid rgba(139,92,246,0.35)',
+            borderLeft: '22px solid rgba(139,92,246,0.35)',
+            transform: 'rotate(45deg)',
+            boxShadow: '0 0 36px rgba(56,189,248,0.85)',
           }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              width: 116,
-              height: 116,
-              borderRadius: '50%',
-              border: '9px solid #38BDF8',
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              width: 64,
-              height: 64,
-              borderRadius: '50%',
-              border: '9px solid #8B5CF6',
-            }}
-          />
-          <div
-            style={{
-              width: 26,
-              height: 26,
-              borderRadius: '50%',
-              background: '#38BDF8',
-              boxShadow: '0 0 24px rgba(56,189,248,0.9)',
-            }}
-          />
-        </div>
+        />
       </div>
     ),
     { ...size }

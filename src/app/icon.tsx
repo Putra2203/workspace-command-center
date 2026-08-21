@@ -15,45 +15,31 @@ export default function Icon() {
           justifyContent: 'center',
           background: '#05070A',
           borderRadius: 7,
+          position: 'relative',
         }}
       >
         <div
           style={{
-            position: 'relative',
-            width: 24,
-            height: 24,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            position: 'absolute',
+            width: 26,
+            height: 26,
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(139,92,246,0.45) 0%, transparent 70%)',
+            top: 3,
+            right: -2,
           }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              width: 24,
-              height: 24,
-              borderRadius: '50%',
-              border: '2.5px solid #38BDF8',
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              width: 13,
-              height: 13,
-              borderRadius: '50%',
-              border: '2.5px solid #8B5CF6',
-            }}
-          />
-          <div
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: '#38BDF8',
-            }}
-          />
-        </div>
+        />
+        <div
+          style={{
+            width: 13,
+            height: 13,
+            borderTop: '4px solid #38BDF8',
+            borderRight: '4px solid #38BDF8',
+            borderRadius: 3,
+            transform: 'rotate(45deg)',
+            boxShadow: '0 0 7px rgba(56,189,248,0.85)',
+          }}
+        />
       </div>
     ),
     { ...size }
