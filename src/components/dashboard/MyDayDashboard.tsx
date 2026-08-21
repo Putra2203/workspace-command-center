@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { Activity, AlertTriangle, Ban, CalendarClock, Flame, Clock, CheckCircle2, UserPlus, Radio } from 'lucide-react';
+import { Activity, AlertTriangle, Ban, CalendarClock, Clock, CheckCircle2, UserPlus, Radio } from 'lucide-react';
 import { computeMyDayBuckets, type PlaneStateLike, type WorkItemLike } from '@/domain/work_items/my-day';
-import { scoreTask } from '@/domain/work_items/scoring';
+import type { Project } from '@/lib/context/workspace-data';
 import { detectStaleAndBlockedWork } from '@/domain/work_items/stale-work';
 import { filterUnassignedTickets } from '@/domain/work_items/ticket-pool';
-import { getNextFocusTask } from '@/domain/work_items/focus-queue';
+import { getTopFocusTasks } from '@/domain/work_items/focus-queue';
 import dynamic from 'next/dynamic';
 import { FocusModeBanner } from './FocusModeBanner';
 import { QuickTaskCapture } from './QuickTaskCapture';
@@ -44,13 +44,14 @@ interface MyDayDashboardProps {
   memberMap: Map<string, string>;
   currentUserId: string | null;
   activeProjectKey: string | null;
+  projects: Project[];
   onRefreshNeeded?: () => void;
 }
 
-export function MyDayDashboard({ issues, states, memberMap, currentUserId, activeProjectKey, onRefreshNeeded }: MyDayDashboardProps) {
+export function MyDayDashboard({ issues, states, memberMap, currentUserId, activeProjectKey, projects, onRefreshNeeded }: MyDayDashboardProps) {
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const selectedIssue = selectedIssueId ? issues.find(i => i.id === selectedIssueId) || null : null;
-  const { metrics, dueTodayIssues, overdueIssues, blockedIssues, activeIssues } = useMemo(
+  const { metrics, dueTodayIssues, overdueIssues, blockedIssues } = useMemo(
     () => computeMyDayBuckets(issues, states, currentUserId),
     [issues, states, currentUserId]
   );
@@ -65,19 +66,9 @@ export function MyDayDashboard({ issues, states, memberMap, currentUserId, activ
     [issues, states]
   );
 
-  const focusTask = useMemo(
-    () => getNextFocusTask(issues, states, currentUserId),
+  const focusTasks = useMemo(
+    () => getTopFocusTasks(issues, states, currentUserId, 3),
     [issues, states, currentUserId]
-  );
-
-  const recommended = useMemo(
-    () =>
-      activeIssues
-        .map(issue => ({ issue, score: scoreTask({ dueDate: issue.target_date, priority: issue.priority }) }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 3)
-        .map(({ issue }) => issue),
-    [activeIssues]
   );
 
   const telemetryStrip = [
@@ -145,7 +136,7 @@ export function MyDayDashboard({ issues, states, memberMap, currentUserId, activ
 
       {/* Primary Mission Focus Banner */}
       <FocusModeBanner
-        task={focusTask}
+        tasks={focusTasks}
         activeProjectKey={activeProjectKey}
         onTaskCompleted={handleTaskUpdated}
       />
@@ -153,6 +144,7 @@ export function MyDayDashboard({ issues, states, memberMap, currentUserId, activ
       {/* Quick Task Capture */}
       <QuickTaskCapture
         activeProjectKey={activeProjectKey}
+        projects={projects}
         onTaskCreated={handleTaskUpdated}
       />
 
@@ -173,53 +165,8 @@ export function MyDayDashboard({ issues, states, memberMap, currentUserId, activ
 
       {/* Main Operations Split Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left Column: Recommended & Stale Operations (2 Cols on lg) */}
+        {/* Left Column: Stale Operations (2 Cols on lg) */}
         <div className="lg:col-span-2 space-y-4">
-          {/* Recommended Priority Operations */}
-          <div className="p-4 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-3">
-            <div className="flex items-center justify-between border-b border-white/[0.04] pb-2.5">
-              <div className="flex items-center gap-2">
-                <Flame className="w-4 h-4 text-orange-400" />
-                <TechnicalLabel>Priority Mission Queue</TechnicalLabel>
-              </div>
-              <span className="text-[10px] font-mono text-cyan-400">
-                {recommended.length} items queued
-              </span>
-            </div>
-
-            <div className="space-y-1.5">
-              {recommended.length > 0 ? (
-                recommended.map((task) => {
-                  const projectIdentifier = task.project_detail?.identifier || activeProjectKey || 'TASK';
-                  const key = task.sequence_id ? `${projectIdentifier}-${task.sequence_id}` : task.id;
-                  return (
-                    <div
-                      key={task.id}
-                      onClick={() => setSelectedIssueId(task.id)}
-                      className="p-2.5 rounded-lg bg-[#10151C] border border-white/[0.06] hover:border-cyan-400/30 transition-all flex items-center justify-between gap-3 cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/20 shrink-0">
-                          {key}
-                        </span>
-                        <span className="text-xs text-[#FAFAFA] font-medium truncate group-hover:text-cyan-300 transition-colors">
-                          {task.name || task.title}
-                        </span>
-                      </div>
-                      <span className="text-[9px] font-mono uppercase px-2 py-0.5 rounded bg-[#080B10] text-[#71717A] border border-white/[0.04] shrink-0">
-                        {task.priority || 'NORMAL'}
-                      </span>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="p-4 text-center text-xs font-mono text-[#52525B]">
-                  NO PENDING PRIORITY WORK ITEMS.
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* Stale / Blocked Operations */}
           {staleOrBlockedList.length > 0 && (
             <div className="p-4 rounded-xl bg-[#0B0F14] border border-white/[0.06] space-y-3">

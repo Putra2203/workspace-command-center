@@ -6,7 +6,7 @@ import { useWorkspaceData } from '@/lib/context/workspace-data';
 
 export default function DayPage() {
   const { currentUser, activeProjectKey } = useWorkspaceStore();
-  const { issues, states, memberMap, fetchProjectData } = useWorkspaceData();
+  const { issues, states, memberMap, projects, fetchProjectData } = useWorkspaceData();
 
   return (
     <MyDayDashboard
@@ -15,6 +15,7 @@ export default function DayPage() {
       memberMap={memberMap}
       currentUserId={currentUser?.id || null}
       activeProjectKey={activeProjectKey}
+      projects={projects}
       onRefreshNeeded={fetchProjectData}
     />
   );
