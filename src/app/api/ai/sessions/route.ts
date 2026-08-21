@@ -21,12 +21,24 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Otherwise return session list
+  // Otherwise return session list (excluding empty phantom sessions)
   try {
     if (!prisma || !(prisma as any).chatSession) {
       return Response.json({ sessions: [], fallback: true });
     }
+
+    // Auto-prune old ghost sessions with 0 messages in the background
+    (prisma as any).chatSession.deleteMany({
+      where: {
+        messages: { none: {} },
+      },
+    }).catch(() => {});
+
+    // Only return sessions that have at least 1 message
     const sessions = await (prisma as any).chatSession.findMany({
+      where: {
+        messages: { some: {} },
+      },
       orderBy: { updatedAt: 'desc' },
       take: 50,
       include: {
@@ -90,7 +102,7 @@ export async function PUT(request: NextRequest) {
       },
     });
 
-    // Auto-update session title from first user message
+    // Auto-update session title from first user message if still default
     if (role === 'user' && (prisma as any).chatSession) {
       const msgCount = await (prisma as any).chatMessage.count({ where: { sessionId } });
       if (msgCount === 1) {
@@ -110,21 +122,33 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const sessionId = request.nextUrl.searchParams.get('sessionId');
+    let sessionId = request.nextUrl.searchParams.get('sessionId');
+    if (!sessionId) {
+      const body = await request.json().catch(() => ({}));
+      sessionId = body.sessionId;
+    }
+
     if (!sessionId) {
       return Response.json({ error: 'sessionId is required' }, { status: 400 });
     }
 
-    // Skip DB delete for local fallback sessions
-    if (!sessionId.startsWith('local-') && prisma && (prisma as any).chatSession) {
-      await (prisma as any).chatSession.delete({
-        where: { id: sessionId },
-      });
+    // Explicitly delete messages first to guarantee no foreign key errors, then delete session
+    if (!sessionId.startsWith('local-') && prisma) {
+      if ((prisma as any).chatMessage) {
+        await (prisma as any).chatMessage.deleteMany({
+          where: { sessionId },
+        }).catch((e: any) => console.warn('Could not delete messages for session:', e));
+      }
+      if ((prisma as any).chatSession) {
+        await (prisma as any).chatSession.delete({
+          where: { id: sessionId },
+        });
+      }
     }
 
     return Response.json({ success: true, deletedId: sessionId });
-  } catch (error) {
-    console.warn('Failed to delete chat session from DB:', error);
-    return Response.json({ success: true, deletedId: 'local' });
+  } catch (error: any) {
+    console.error('Failed to delete chat session from DB:', error);
+    return Response.json({ error: error.message || 'Failed to delete session' }, { status: 500 });
   }
 }

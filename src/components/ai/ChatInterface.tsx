@@ -127,13 +127,6 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
     loadSessions();
   }, []);
 
-  useEffect(() => {
-    if (!sessionId) {
-      createNewSession();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const loadSessions = async () => {
     try {
       const res = await fetch('/api/ai/sessions');
@@ -144,22 +137,10 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
     }
   };
 
-  const createNewSession = async () => {
-    try {
-      const res = await fetch('/api/ai/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId: activeProjectId || 'ALL' }),
-      });
-      const data = await res.json();
-      if (data.session) {
-        setSessionId(data.session.id);
-        setMessages([]);
-        loadSessions();
-      }
-    } catch {
-      setSessionId(`local-${Date.now()}`);
-    }
+  const createNewSession = () => {
+    setSessionId(null);
+    setMessages([]);
+    setShowHistoryMobile(false);
   };
 
   const loadSession = async (session: ChatSession) => {
@@ -194,17 +175,17 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
     // Optimistic UI update
     setSessions((prev) => prev.filter((s) => s.id !== idToDelete));
 
-    // If the active session is deleted, switch to a new clean session
-    if (sessionId === idToDelete) {
-      createNewSession();
-    }
-
     try {
       await fetch(`/api/ai/sessions?sessionId=${encodeURIComponent(idToDelete)}`, {
         method: 'DELETE',
       });
-    } catch {
-      // ignore
+    } catch (err) {
+      console.warn('Failed to delete session:', err);
+    }
+
+    // If the active session is deleted, switch to a new clean session after deletion
+    if (sessionId === idToDelete) {
+      await createNewSession();
     }
   };
 
@@ -273,13 +254,37 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
     setImageAttachment(null);
     setIsLoading(true);
 
+    let activeSessionId = sessionId;
+
     try {
-      if (sessionId) {
+      // Lazy Session Creation: Only create database session on the first prompt
+      if (!activeSessionId) {
+        try {
+          const createRes = await fetch('/api/ai/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: (rawInput || 'Image Attachment Analysis').slice(0, 80),
+              projectId: activeProjectKey || activeProjectId || 'ALL',
+            }),
+          });
+          const createData = await createRes.json();
+          if (createData.session?.id) {
+            activeSessionId = createData.session.id;
+            setSessionId(activeSessionId);
+          }
+        } catch {
+          activeSessionId = `local-${Date.now()}`;
+          setSessionId(activeSessionId);
+        }
+      }
+
+      if (activeSessionId) {
         fetch('/api/ai/sessions', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            sessionId,
+            sessionId: activeSessionId,
             role: 'user',
             content: rawInput || 'Attachment analyzed',
           }),
@@ -293,7 +298,7 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
         body: JSON.stringify({
           message: processedMessage || 'Analisis screenshot ini dan buat task baru jika ditemukan isu.',
           projectId: targetProject,
-          sessionId,
+          sessionId: activeSessionId,
           image: currentAttachment ? { base64Data: currentAttachment.base64, mimeType: currentAttachment.mimeType } : undefined,
         }),
       });
@@ -310,12 +315,12 @@ export function ChatInterface({ onActionExecuted }: ChatInterfaceProps) {
 
       setMessages((prev) => [...prev, assistantMessage]);
 
-      if (sessionId) {
+      if (activeSessionId) {
         fetch('/api/ai/sessions', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            sessionId,
+            sessionId: activeSessionId,
             role: 'assistant',
             content: assistantMessage.content,
             plan: assistantMessage.plan,
