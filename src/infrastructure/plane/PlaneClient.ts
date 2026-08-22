@@ -223,7 +223,12 @@ export class PlaneService {
    */
   async resolveIssueInfo(projectId: string, issueIdOrKey: string): Promise<{ issueId: string; realProjectId: string }> {
     if (this.isUUID(issueIdOrKey) && projectId !== 'ALL') {
-      return { issueId: issueIdOrKey, realProjectId: projectId };
+      // `projectId` may be a project identifier (e.g. "BSJ") rather than its UUID —
+      // callers that resolve it from `issue.project_detail.identifier` pass exactly
+      // that. Plane's REST API requires a real project UUID in the URL path, so an
+      // unresolved identifier here previously caused a genuine 404 from Plane itself.
+      const realProjectId = await this.resolveProjectId(projectId);
+      return { issueId: issueIdOrKey, realProjectId };
     }
 
     const realProjectId = await this.resolveProjectId(projectId);

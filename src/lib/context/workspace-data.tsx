@@ -317,10 +317,11 @@ export function WorkspaceDataProvider({ children }: { children: ReactNode }) {
   const handleMoveIssue = useCallback(async (issueId: string, newStateId: string) => {
     if (!activeProjectId) return;
 
+    const matchingState = states.find(s => s.id === newStateId);
+
     // 1. Optimistic UI update
     setIssues(prev => prev.map(issue => {
       if (issue.id === issueId) {
-        const matchingState = states.find(s => s.id === newStateId);
         return {
           ...issue,
           state: newStateId,
@@ -330,7 +331,10 @@ export function WorkspaceDataProvider({ children }: { children: ReactNode }) {
       return issue;
     }));
 
-    // 2. Persist to Plane API backend
+    // 2. Persist to Plane API backend. Send the state's NAME, not its raw id: in
+    // "ALL projects" scope `states` is canonicalized/deduped by name across projects,
+    // so `newStateId` can belong to a *different* project than this issue's own —
+    // sending the name lets the backend re-resolve it against the issue's real project.
     try {
       const res = await fetch('/api/plane?action=updateIssue', {
         method: 'PATCH',
@@ -338,7 +342,7 @@ export function WorkspaceDataProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({
           projectId: activeProjectId,
           issueId,
-          state: newStateId
+          state: matchingState?.name || newStateId
         })
       });
       if (!res.ok) {

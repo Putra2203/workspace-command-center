@@ -202,7 +202,12 @@ export function WorkItemDetailPanel({
   const handleStateChange = async (stateId: string) => {
     setSavingField('state');
     try {
-      await patchIssue({ state: stateId });
+      // Send the state's NAME, not its raw id: in "ALL projects" scope, `states` is a
+      // canonicalized list deduped by name across projects, so an id picked from it can
+      // belong to a *different* project than this issue's own. Sending the name lets the
+      // backend re-resolve it against this issue's actual project's real state id.
+      const stateName = states.find(s => s.id === stateId)?.name || stateId;
+      await patchIssue({ state: stateName });
     } finally {
       setSavingField(null);
     }
@@ -226,7 +231,7 @@ export function WorkItemDetailPanel({
       body: JSON.stringify({
         projectId: subIssue.project_detail?.identifier || projectKey,
         issueId: subIssue.id,
-        state: doneState.id,
+        state: doneState.name,
       }),
     });
     onChanged();
